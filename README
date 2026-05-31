@@ -1,0 +1,28 @@
+obex_put
+========
+
+Simple OBEX PUT program,used to transfer small file over
+RFCOMM connection.
+
+Usage
+=====
+     @program <BT-ADDRESS> <RFCOMM-CHANNEL> <filename>
+     # No command line parameter checking,thus the bad
+       order to arguments will cause undefined behavior.
+     # No SDP integrated,need to get Push channel manually.
+         sdptool browser <BT-ADDRESS>
+       (TODO)
+
+Addition
+========     
+
+Only "txt", "jpg", "png" file formats are supporting now.
+Need to keep the file name suffix as the same to the file
+format,because @obex_put use the suffix to determines the
+MIME type.
+
+Environment
+===========
+    gcc 14.2
+    glibc 2.41
+    kernel 6.18.33
