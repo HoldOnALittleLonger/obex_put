@@ -139,12 +139,6 @@ struct obex_header {
         uint8_t hv[0];
 } __attribute__((packed));
 
-/* maximum packet size in bytes */
-#define MAX_OBEX_PACKET_SIZE (64U * 1024U - 1U)
-
-/* minimum packet size in bytes */
-#define MIN_OBEX_PACKET_SIZE 255U
-
 struct obex_packet {
         uint8_t packet_code;
         uint16_t packet_len_netord;
@@ -154,6 +148,14 @@ struct obex_packet {
 typedef struct obex_packet obex_request_t;
 typedef struct obex_packet obex_response_t;
 
+
+/* maximum packet size in bytes */
+#define MAX_OBEX_PACKET_SIZE (64U * 1024U - 1U)
+
+/* minimum packet size in bytes */
+#define MIN_OBEX_PACKET_SIZE 255U
+
+/* current version number */
 #define OBEX_CURR_VERSION_NUM 0x10
 
 #endif /* _OBEX_PACKET_H_ */

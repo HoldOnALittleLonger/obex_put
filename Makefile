@@ -12,7 +12,8 @@ SHARED_LIBS := bluetooth
 
 obex_put: main.o obex_impl.o obex_layout.o obex_helpers.o mime_type.o
 	$(CC) -o $@ $(CFLAGS) $^ -l$(SHARED_LIBS)
+	install $@ bin/
 
 .PHONY: clean
 clean:
-	rm -f *.o
+	rm -f *.o obex_put

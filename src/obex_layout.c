@@ -95,8 +95,6 @@ exit_err_free:
         return NULL;
 }
 
-#include <stdio.h>
-
 /**
  * similar to obex_make_first_put(),but all headers are either BODY or
  * EOB.
@@ -105,28 +103,17 @@ obex_request_t *obex_make_rest_put(ohdr_init_collect *hdrs)
 {
         bool all = false;
         /* we check head at first,check rest in initializing phase */
-        if (hdrs->hi != OBEX_HI_BODY && hdrs->hi != OBEX_HI_EOB) {
-                fprintf(stderr, "%s: %d - bad hi %#x,return\n",
-                        __FUNCTION__, __LINE__, hdrs->hi);
+        if (hdrs->hi != OBEX_HI_BODY && hdrs->hi != OBEX_HI_EOB)
                 return NULL;
-        }
         
         size_t hdr_size = accumulate_hdrs_size_nonil(hdrs);
-        fprintf(stderr, "%s: %d - hdrs size is %zu\n", __FUNCTION__,
-                __LINE__, hdr_size);
         obex_request_t *req = ctor_obex_packet(OBEX_REQC_PUT,
                                                obex_packet_compute_size(hdr_size));
-        if (!req) {
-                fprintf(stderr, "%s: %d - NULL packet,size is %zu\n",
-                        __FUNCTION__, __LINE__, hdr_size);
+        if (!req)
                 return NULL;
-        }
 
         void *addr_iter = req;
         addr_iter += OBEX_PACKET_HDR_SIZE;
-
-        fprintf(stderr, "%s: %d - initialize first hdr\n",
-                __FUNCTION__, __LINE__);
 
         /* first hdr */
         addr_iter = obex_hdr_ctor_inplace(addr_iter, hdrs->hi, &hdrs->value);
@@ -136,8 +123,6 @@ obex_request_t *obex_make_rest_put(ohdr_init_collect *hdrs)
                 all = true;
 
         /* rest hdr */
-        fprintf(stderr, "%s: %d - initialize rest hdr\n",
-                __FUNCTION__, __LINE__);
         ohdr_init_collect *entity;
         ohdr_init_collect_for_each_entry(entity, hdrs) {
                 if (entity->hi != OBEX_HI_BODY || entity->hi != OBEX_HI_EOB)

@@ -11,7 +11,6 @@ enum MIME_TYPE {
         MIMET_PNG,
         MIMET_SUPPORTED_MAX,
 };
-
 extern const char *mime_type_table[MIMET_SUPPORTED_MAX];
 
 static inline const char *get_mime_type(enum MIME_TYPE t)
@@ -19,5 +18,7 @@ static inline const char *get_mime_type(enum MIME_TYPE t)
         assert(t < MIMET_SUPPORTED_MAX);
         return mime_type_table[t];
 }
+
+extern enum MIME_TYPE suffix2mime(const char *);
 
 #endif /* mime_type.h */

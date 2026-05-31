@@ -23,7 +23,7 @@
 
 /* 2^15 */
 //#define FILE_CHUNK_SIZE 32768
-#define FILE_CHUNK_SIZE 1024
+#define FILE_CHUNK_SIZE 4096
 
 #define OBEX_RESERVED_SIZE 128
 /* 33280 B */
@@ -128,6 +128,24 @@ exit_err_close:
         return -1;
 }
 
+static inline ssize_t get_file_size(const char *filepath)
+{
+        struct stat tmp = {0};
+        if (lstat(filepath, &tmp) < 0)
+                return -1;
+
+        return S_ISREG(tmp.st_mode) ? tmp.st_size : -1;
+}
+
+static size_t adjust_fbuffer_size(size_t expect, size_t curr, size_t reserve)
+{
+        if (expect < reserve)
+                return 0;
+        while (expect < curr + reserve)
+                curr /= 2;
+        return curr;
+}
+
 int main(int argc, char *argv[])
 {
         if (argc != 4) {
@@ -150,26 +168,8 @@ int main(int argc, char *argv[])
 
         enum MIME_TYPE mime;
         const char *psuffix = strrchr(file_name, '.');
-        if (psuffix) {
-                if (strncmp(psuffix, ".txt", 5) == 0)
-                        mime = MIMET_TXT;
-                else if (strncmp(psuffix, ".jpg", 5) == 0)
-                        mime = MIMET_JPG;
-                else if (strncmp(psuffix, ".jpeg", 6) == 0)
-                        mime = MIMET_JPEG;
-                else if (strncmp(psuffix, ".png", 5) == 0)
-                        mime = MIMET_PNG;
-                else {
-                        fprintf(stderr,
-                                "error: unsupported mime type with suffix %s .\n",
-                                psuffix);
-                        return -1;
-                }
-        } else {
-                fprintf(stderr, "error: unknown mime type.\n");
-                return -1;
-        }
-
+        mime = suffix2mime(psuffix);
+        
         uint8_t channel = atoi(push_channel);
         if (!channel || channel > BLUETOOTH_MAX_CHANNELS) {
                 fprintf(stderr, "error: the channel %hu must in range [1, 30].\n",
@@ -184,24 +184,11 @@ int main(int argc, char *argv[])
         }
 
         /* file size */
-        size_t fsize = 0;
-        struct stat finfo = {0};
-        if (lstat(fpath, &finfo) < 0) {
-                perror("error: retrieve file info failed.\n");
+        size_t fsize = get_file_size(fpath);
+        if (fsize < 0) {
+                perror("error: failed to get file size or is not regular file.\n");
                 ret = -1;
                 goto exit_close;
-        } else {
-                if (!S_ISREG(finfo.st_mode)) {
-                        perror("error: only support regular file.\n");
-                        ret = -1;
-                        goto exit_close;
-                }
-                fsize = finfo.st_size;
-                if (!fsize) {
-                        perror("error: zero size file.\n");
-                        ret = -1;
-                        goto exit_close;
-                }
         }
         printf("target file's size is %lu bytes.\n", fsize);
 
@@ -216,34 +203,26 @@ int main(int argc, char *argv[])
                 goto exit_close;
         }
 
-        printf("send OBEX CONNECT to peer.\n");
-        uint16_t packet_size = DEFAULT_OBEX_PACKET_SIZE;
-        ret = obex_try_connect(rfcomm_sock, 0, &packet_size);
+        uint16_t fbsize = DEFAULT_OBEX_PACKET_SIZE;
+        printf("try connect to peer\n");
+        printf("default packet size is %hu\n", fbsize);
+        ret = obex_try_connect(rfcomm_sock, 0, &fbsize);
         if (ret < 0) {
-                perror("error: send CONNECT packet failed.\n");
-                goto exit_close;
-        } else if (!packet_size) {
-                ret = -1;
-                perror("error: peer wants zero packet size.\n");
+                perror("error: connect failed.\n");
                 goto exit_close;
         }
-        printf("peer expected packet size is %hu\n", packet_size);
-        if (packet_size < OBEX_RESERVED_SIZE) {
-                perror("error: the expected packet size is too small.\n");
-                goto exit_close;
-        }
+        printf("peer expected packet size is %hu\n", fbsize);
 
-        /* adjust file size */
-        size_t file_buffer_size = FILE_CHUNK_SIZE;
-        while (packet_size < file_buffer_size + OBEX_RESERVED_SIZE){
-                file_buffer_size /= 2;
+        fbsize = adjust_fbuffer_size(fbsize, FILE_CHUNK_SIZE, OBEX_RESERVED_SIZE);
+        if (!fbsize) {
+                perror("error: peer expecting packet size too small.\n");
+                ret = -1;
+                goto exit_close;
         }
-        printf("packet size is %u, file chunk size is %u\n",
-               file_buffer_size + OBEX_RESERVED_SIZE,
-               file_buffer_size);
+        printf("final packet size is %hu\n", fbsize + OBEX_RESERVED_SIZE);
         
         ret = start_object_transferring(rfcomm_sock, fd, file_name, fsize,
-                                        file_buffer_size, mime);
+                                        fbsize, mime);
         if (ret < 0) {
                 perror("error: send object failed.\n");
         }
@@ -251,7 +230,6 @@ int main(int argc, char *argv[])
         obex_send_disconnect(rfcomm_sock);
 
         printf("exit...\n");
-
 exit_close:
         (void)close(rfcomm_sock);
         (void)close(fd);

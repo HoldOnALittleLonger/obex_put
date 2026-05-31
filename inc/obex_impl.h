@@ -515,12 +515,15 @@ void dtor_obex_packet(struct obex_packet *packet)
         free(packet);
 }
 
-#define obex_set_bit(__uintvp, __bitn)              \
-        do {                                        \
-                (*__uintvp) |= (1U << (__bitn));    \
-        } while (0)
+//#define obex_set_bit(__uintvp, __bitn)            \
+//        do {                                        \
+//                (*__uintvp) |= (1U << (__bitn));    \
+//        } while (0)
 
-#define obex_set_final(__uint8vp) obex_set_bit(__uint8vp, 7)
+#define obex_set_final(__uint8vp)        \
+        do {                             \
+                *(__uint8vp) |= 0x80;    \
+        } while (0)
 
 /**
  *                     |<-------- hv ------->|

@@ -117,7 +117,7 @@ void *obex_hdr_ctor_name_inplace(struct obex_header *hdr,
         ++text_len;
         /* convert to UTF-16BE from UTF-8 */
         if (iconv(filter, &text, &text_len, &buff_iter, &buffer_size)
-            == (iconv_t)-1)
+            == (size_t)-1)
                 goto exit_err_free;
         iconv_close(filter);
         

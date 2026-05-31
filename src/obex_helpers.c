@@ -64,7 +64,6 @@ static int obex_send(int obex_sock, obex_request_t *put_req,
         if (ret <= 0)
                 return -1;
         ctor_obex_minimal_response_local(__res);
-        printf("waiting for response.\n");
         ret = read(obex_sock, __res, OBEX_PACKET_HDR_SIZE);
         if (ret <= 0 || !tester(__res)) {
                 ret = -1;

@@ -17,10 +17,8 @@ typedef bool (*obex_status_checker_t)(obex_response_t *);
 /* the connection success code is 0xa0 */
 static inline bool obex_connect_ok(obex_response_t *res)
 {
-        printf("peer return %#x\n", res->packet_code);
         uint8_t expect_code = OBEX_RESC_OK;
         obex_set_final(&expect_code);
-//        printf("expect code %#x\n", expect_code);
         return obex_test_res_code(res, expect_code);
 }
 
@@ -28,10 +26,8 @@ static inline bool obex_connect_ok(obex_response_t *res)
 
 static inline bool obex_is_res_cont(obex_response_t *res)
 {
-        printf("peer return %#x\n", res->packet_code);
         uint8_t expect_code = OBEX_RESC_CONT;
         obex_set_final(&expect_code);
-//        printf("expect code %#x\n", expect_code);
         return obex_test_res_code(res, expect_code);
 }
 
