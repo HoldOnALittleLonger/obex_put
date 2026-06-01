@@ -158,4 +158,12 @@ typedef struct obex_packet obex_response_t;
 /* current version number */
 #define OBEX_CURR_VERSION_NUM 0x10
 
+/* minimal connect packet size */
+#define OBEX_MINI_CONNECTREQ_SIZE 7
+
+#define OBEX_CONNECT_VERN_OFFSET 3
+#define OBEX_CONNECT_FLAGS_OFFSET 4
+#define OBEX_CONNECT_MPSIZE_OFFSET 5
+#define OBEX_CONNECT_OPT_OFFSET 7
+
 #endif /* _OBEX_PACKET_H_ */

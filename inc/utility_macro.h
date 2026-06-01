@@ -328,4 +328,30 @@ static inline bool um_time_after_time_t(time_t t1, time_t t2)
 
 #endif /* time compare */
 
+#if defined(UM_CONFIG_DUMP)
+#include <stdio.h>
+#include <stddef.h>
+
+void um_dump_mem(void *mem, size_t range, const char *msg)
+{
+        unsigned short newline_cnt = 10;
+        fprintf(stderr, "[ ================ %s ================ ]\n",
+                __FUNCTION__);
+        if (msg)
+                fprintf(stderr, "MSG: %s\n", msg);
+        setvbuf(0, stderr, NULL, _IOFBF, 0);
+        for (size_t iter = 0; iter < range; ++iter) {
+                fprintf(stderr, "%#8x ", mem[iter]);
+                if (!--newline_cnt) {
+                        newline_cnt = 10;
+                        fprintf(stderr, "\n");
+                }
+        }
+        fflush(stderr);
+        setlinebuf(stderr);
+        fprintf(stderr, "[ ================ CUT OFF ================ ]\n");
+}
+
+#endif
+
 #endif /* header end */

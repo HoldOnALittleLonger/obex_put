@@ -314,16 +314,9 @@ extern void destroy_whole_ohdr_init_collect(ohdr_init_collect *);
         })
 
 /**
- * we may waste 1 byte because null-terminate,
- * but we can let in-place constructor to handles
- * this.
- * actually,there is only a few kind of hdr is
- * no null-terminate,such BODY,but as convention,
- * we put the hdr at the tail of packet.
- * if hdr is null-terminate appending,this will
- * get the correct hdr size.
- * if hdr is not null-terminate appending,this
- * will get the result that corret hdr size + 1 .
+ * this macro function is called by obex_hdr_compute_size()
+ * only,we can safe to add null-terminate in size,
+ * obex_hdr_compute_size() will remove it for us.
  */
 #define obex_hdr_pattern_01_size(__value_size) ({ \
         size_t __size = OBEX_HDR_HI_SIZE +        \
@@ -377,8 +370,11 @@ static inline size_t obex_hdr_compute_size(uint8_t hi, size_t value_size)
         switch (p) {
         case OBEX_HDR_PATTERN_00:
                 return obex_hdr_pattern_00_size(value_size);
-        case OBEX_HDR_PATTERN_01:
-                return obex_hdr_pattern_01_size(value_size);
+        case OBEX_HDR_PATTERN_01: {
+                /* we limit the size adjust in this scopde. */
+                size_t size = obex_hdr_pattern_01_size(value_size);
+                return obex_hdr_no_nil(hi) ? size - 1 : size;
+        }
         case OBEX_HDR_PATTERN_10:
                 return obex_hdr_pattern_10_size(value_size);
         case OBEX_HDR_PATTERN_11:

@@ -154,10 +154,7 @@ void *obex_hdr_ctor_body_inplace(struct obex_header *hdr,
 {
         void *chunk = (void *)value->large_size_initializer;
         size_t chunk_size = value->initializer_size;
-        
-        /* because BODY has no null-terminate */
-        size_t hdr_size = obex_hdr_compute_size(hdr->hi, chunk_size) - 1;
-        
+        size_t hdr_size = obex_hdr_compute_size(hdr->hi, chunk_size);
         obex_hdr_field_pointer_t fp = {0};
         fp = obex_hdr_visitor(hdr, OBEX_HDR_MEMBER0);
         *obex_hdr_fp_get_u16(&fp) = htons(hdr_size);

@@ -12,6 +12,9 @@
 
 #include "mime_type.h"
 
+#define UM_CONFIG_DUMP
+#include "utility_macro.h"
+
 /* flush opt data if has any */
 #define flush_obex_stream(__obex_sock, __rest_size)                             \
         do {                                                                    \
@@ -25,28 +28,6 @@
                         __remain -= ret;                                        \
                 }                                                               \
         } while (0)
-
-void dump_mem(void *start, size_t range, const char *msg)
-{
-        fprintf(stderr, "[ Dump -------------------------------- ]\n");
-        fprintf(stderr, "  Total %zu bytes\n", range);
-        if (msg)
-                fprintf(stderr, "%s -------- START\n", msg);
-        uint8_t cnt = 10;
-        uint8_t *mem = (uint8_t *)start;
-        fprintf(stderr, "memory address start from - %#x\n", mem);
-        while (range--) {
-                fprintf(stderr, "%#04x ", *mem++);
-                if (!--cnt){
-                        putchar('\n');
-                        cnt = 10;
-                }
-        }
-        putchar('\n');
-        if (msg)
-                fprintf(stderr, "%s -------- END\n", msg);
-        fprintf(stderr, "[ ---------------- CUT OFF ---------------- ]\n");
-}
 
 /**
  * obex_send - generic send method.
@@ -93,46 +74,37 @@ exit_err_free:
  */
 int obex_try_connect(int obex_sock, uint8_t flags, uint16_t *packet_size)
 {
-        obex_request_t *connect_req = ctor_obex_connect_request(OBEX_CURR_VERSION_NUM,
-                                                                flags,
-                                                                *packet_size, 0);
-        if (!connect_req)
-                return -1;
+        uint8_t packet[OBEX_MINI_CONNECTREQ_SIZE] = {0};
+        obex_request_t *connect_req = (obex_request_t *)packet;
+        copy_obex_mini_connect(flags, *packet_size, connect_req, OBEX_MINI_CONNECTREQ_SIZE);        
         
 #if defined(DEBUG)
-        dump_mem(connect_req, ntohs(connect_req->packet_len_netord), "dump connect request");
+        um_dump_mem(connect_req, ntohs(connect_req->packet_len_netord), "dump connect request");
 #endif
 
         uint8_t res_buffer[MIN_OBEX_PACKET_SIZE] = {0};
         obex_response_t *res = (obex_response_t *)res_buffer;
-        int result = obex_send(obex_sock, connect_req, obex_connect_ok, res);
-        if (result < 0)
-                goto exit_err_free;
+        if (obex_send(obex_sock, connect_req, obex_connect_ok, res) < 0)
+                return -1;
         
         /* read reamin */
         size_t readed = OBEX_PACKET_HDR_SIZE;
         size_t remain = ntohs(res->packet_len_netord) - readed;
-        result = read(obex_sock, res_buffer + readed, remain);
-        if (result <= 0) {
-                result = -1;
-                goto exit_err_free;
-        }
+        if (read(obex_sock, res_buffer + readed, remain) <= 0)
+                return -1;
+
         /* we hope version 1.0 */
-        if (OBEX_CURR_VERSION_NUM != *extract_obex_conn_vern(res)) {
+        if (OBEX_CURR_VERSION_NUM != *obex_connect_vern(res)) {
                 perror("error: bad OBEX version.\n");
-                result = -1; 
-                goto exit_err_free;
+                return -1;
         }
         
 #if defined(DEBUG)
-        dump_mem(res, 3, "dump connect response");
+        um_dump_mem(res, 3, "dump connect response");
 #endif
-        
-        *packet_size = *extract_obex_conn_maxpsize(res);
-        
-exit_err_free:
-        dtor_obex_packet(connect_req);
-        return result;
+
+        *packet_size = *obex_connect_mpsize(res);
+        return 0;
 }
 
 int obex_send_initial_put(int obex_sock, const char *file_name, size_t file_size,
@@ -194,7 +166,7 @@ int obex_send_initial_put(int obex_sock, const char *file_name, size_t file_size
         }
         
 #if defined(DEBUG)
-        dump_mem(put_req, ntohs(put_req->packet_len_netord) - first_chunk_size, "First PUT");
+        um_dump_mem(put_req, ntohs(put_req->packet_len_netord) - first_chunk_size, "First PUT");
 #endif
         
         obex_status_checker_t checker = all ? obex_is_success : obex_is_res_cont;
@@ -202,7 +174,7 @@ int obex_send_initial_put(int obex_sock, const char *file_name, size_t file_size
 #if defined(DEBUG)
         ctor_obex_minimal_response_local(__res);
         ret = obex_send(obex_sock, put_req, checker, __res);
-        dump_mem(__res, OBEX_PACKET_HDR_SIZE, "First PUT Response");
+        um_dump_mem(__res, OBEX_PACKET_HDR_SIZE, "First PUT Response");
         dtor_obex_minimal_response_local(__res);
 #else
         ret = obex_send(obex_sock, put_req, checker, NULL);
@@ -241,14 +213,14 @@ int obex_send_middle_put(int obex_sock, void *chunk, size_t chunk_size)
         }
         
 #if defined(DEBUG)
-        dump_mem(put_req, ntohs(put_req->packet_len_netord) - chunk_size, "Rest PUT");
+        um_dump_mem(put_req, ntohs(put_req->packet_len_netord) - chunk_size, "Rest PUT");
         fprintf(stderr, "Rest PUT size is %zu\n", ntohs(put_req->packet_len_netord));
 #endif
 
 #if defined(DEBUG)
         ctor_obex_minimal_response_local(__res);
         ret = obex_send(obex_sock, put_req, obex_is_res_cont, __res);
-        dump_mem(__res, OBEX_PACKET_HDR_SIZE, "Rest PUT Response");
+        um_dump_mem(__res, OBEX_PACKET_HDR_SIZE, "Rest PUT Response");
         dtor_obex_minimal_response_local(__res);
 #else
         ret = obex_send(obex_sock, put_req, obex_is_res_cont, NULL);
@@ -277,13 +249,13 @@ int obex_send_final_put(int obex_sock)
         }
 
 #if defined(DEBUG)
-        dump_mem(put_req, ntohs(put_req->packet_len_netord), "Final PUT");
+        um_dump_mem(put_req, ntohs(put_req->packet_len_netord), "Final PUT");
 #endif
 
 #if defined(DEBUG)
         ctor_obex_minimal_response_local(__res);
         ret = obex_send(obex_sock, put_req, obex_is_success, __res);
-        dump_mem(__res, OBEX_PACKET_HDR_SIZE, "Final PUT Response");
+        um_dump_mem(__res, OBEX_PACKET_HDR_SIZE, "Final PUT Response");
         dtor_obex_minimal_response_local(__res);
 #else
         ret = obex_send(obex_sock, put_req, obex_is_success, NULL);

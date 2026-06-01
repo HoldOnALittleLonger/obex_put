@@ -9,6 +9,12 @@ enum MIME_TYPE {
         MIMET_JPG,
         MIMET_JPEG = MIMET_JPG,
         MIMET_PNG,
+        MIMET_PDF,
+        MIMET_ZIP,
+        MIMET_MSWORD,
+        MIMET_MSEXCEL,
+        MIMET_MSEXE,
+        MIMET_BIN,
         MIMET_SUPPORTED_MAX,
 };
 extern const char *mime_type_table[MIMET_SUPPORTED_MAX];
