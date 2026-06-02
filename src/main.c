@@ -19,7 +19,7 @@
 
 /* 2^15 */
 //#define FILE_CHUNK_SIZE 32768
-#define FILE_CHUNK_SIZE 4096
+#define FILE_CHUNK_SIZE 8192
 
 #define OBEX_RESERVED_SIZE 128
 /* 33280 B */
@@ -45,9 +45,9 @@ static size_t adjust_fbuffer_size(size_t expect, size_t curr, size_t reserve)
         return curr;
 }
 
-static int start_object_transferring(int fd, const char *fname_nosuffix,
-                                     size_t file_size, const char *type,
-                                     const char *peer_addr, uint8_t channel)
+static int start_object_transferring(int fd, const char *fname, size_t fsize,
+                                     const char *type, const char *peer_addr,
+                                     uint8_t channel)
 {
         struct obex_connect_agent *cagent = NULL;
         const struct obex_connect_agent_operations *caops = NULL;
@@ -70,7 +70,7 @@ static int start_object_transferring(int fd, const char *fname_nosuffix,
         if (ret < 0) {
                 fprintf(stderr, "error: Failed to establish connection\n");
                 fprintf(stderr, "error: - %s\n", strerror(-1 * ret));
-                goto exit_dtor_cagent;
+                goto exit_put_cagent;
         }
         printf("Succeed to establish RFCOMM connection at channel %hu\n", channel);
         printf("Peer expected packet size is %zu\n", cagent->packet_size);
@@ -78,7 +78,7 @@ static int start_object_transferring(int fd, const char *fname_nosuffix,
         if (!fbsize) {
                 fprintf(stderr, "error: Bad file buffer size 0\n");
                 ret = -1;
-                goto exit_dtor_cagent;
+                goto exit_put_cagent;
         }
         printf("We select chunk size %zu\n", fbsize);
 
@@ -86,7 +86,7 @@ static int start_object_transferring(int fd, const char *fname_nosuffix,
         if (!pagent) {
                 fprintf(stderr, "error: Failed to start PUT Agent\n");
                 ret = -1;
-                goto exit_dtor_cagent;
+                goto exit_put_cagent;
         }
         paops = pagent->pa_ops;
         padops = pagent->pad_ops;
@@ -94,10 +94,10 @@ static int start_object_transferring(int fd, const char *fname_nosuffix,
         
         paops->register_fd(pagent, fd);
         paops->register_rfcommsock(pagent, cagent->rfcomm_socket);
-        
-        padops->mod_name(pad, fname_nosuffix);
+
+        padops->mod_name(pad, fname);
         padops->mod_type(pad, type);
-        padops->mod_length(pad, file_size);
+        padops->mod_length(pad, fsize);
         padops->mod_chunk_size(pad, fbsize);
 
         ret = paops->push_object(pagent);
@@ -110,7 +110,9 @@ static int start_object_transferring(int fd, const char *fname_nosuffix,
 
         obex_pa_put(pagent);
         
-exit_dtor_cagent:
+exit_put_cagent:
+        if (cagent->rfcomm_socket)
+                caops->disconnect(cagent);
         obex_ca_put(cagent);
         return ret;
 }
@@ -124,8 +126,6 @@ static inline ssize_t get_file_size(const char *filepath)
         return S_ISREG(tmp.st_mode) ? tmp.st_size : -1;
 }
 
-
-
 int main(int argc, char *argv[])
 {
         if (argc != 4) {
@@ -136,12 +136,12 @@ int main(int argc, char *argv[])
         const char *fpath = argv[3];
         const char *push_channel = argv[2];
         const char *bt_addr = argv[1];
-        int fd = -1, rfcomm_sock = -1;
+        int fd = -1;
         int ret = 0;
 
         const char *last_slash = strrchr(fpath, '/');
         const char *file_name = !last_slash ? fpath : last_slash + 1;
-        if (*file_name == '\0') {
+        if (!*file_name) {
                 perror("error: Do not support transfer directory\n");
                 return -1;
         }
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
         /* file size */
         size_t fsize = get_file_size(fpath);
         if (fsize < 0) {
-                perror("error: failed to get file size or is not regular file.\n");
+                perror("error: Failed to get file size or is not regular file\n");
                 ret = -1;
                 goto exit_close;
         }
@@ -174,12 +174,11 @@ int main(int argc, char *argv[])
         ret = start_object_transferring(fd, file_name, fsize,
                                         mime_type_str, bt_addr, channel);
         if (ret < 0) {
-                perror("error: send object failed.\n");
+                fprintf(stderr, "error: Send object failed\n");
         }
 
         printf("exit...\n");
 exit_close:
-        (void)close(rfcomm_sock);
         (void)close(fd);
         return ret;
 }

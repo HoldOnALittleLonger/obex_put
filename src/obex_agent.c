@@ -1,10 +1,11 @@
-#define UM_CONFIG_DUMP
-
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <arpa/inet.h>
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
+
 #include <stddef.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -14,9 +15,6 @@
 #include "obex_helpers.h"
 #include "obex_impl.h"
 
-#include <arpa/inet.h>
-
-#include "utility_macro.h"
 
 /**
  * =============
@@ -275,10 +273,10 @@ static int default_pa_push_object(struct obex_put_agent *agent)
                         padops->mod_length(pad, 0);
                         remove_useless_pad = 1;
                 }
+
                 ret = lops->make_packet(layout, OBEX_REQC_PUT, hdrs);
                 padops->destroy_all_hdrs(hdrs);
                 packet = lops->get_packet(layout);
-                um_dump_mem(packet, 64, NULL);
                 ret = generic_obex_send(socket_fd, packet, res, obex_status_is_cont);
                 lops->put_packet(layout);
                 agent->status_code = res->packet_code;

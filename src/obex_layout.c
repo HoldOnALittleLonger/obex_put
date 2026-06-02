@@ -6,13 +6,12 @@
 #include "obex_impl.h"
 #include "obex_layout.h"
 
-#include <stdio.h>
-
 static size_t accumulate_hdrs_size(ohdr_init_collect *hdrs)
 {
         size_t hdr_size = 0;
         size_t value_size = 0;
         ohdr_init_collect *entity;
+        size_t tmp_size = 0;
         ohdr_init_collect_for_each_entry(entity, hdrs) {
                 value_size = obex_hdr_probe_initializer_size(entity->hi,
                                                              &entity->value);
@@ -65,7 +64,7 @@ const uint8_t obex_mini_eob_req[OBEX_PACKET_HDR_SIZE + OBEX_PACKET_HDR_SIZE] = {
 
 
 /**
- * =====================
+ * ======================
  * OBEX Layout Operations
  * ======================
  */
@@ -106,8 +105,6 @@ static int default_layout_make_packet(struct obex_layout_struct *handle, uint8_t
                 return -EAGAIN;
         
         psize = OBEX_PACKET_HDR_SIZE + accumulate_hdrs_size(hdrs);
-        fprintf(stderr, "psize is %#x\n", psize);
-        fprintf(stderr, "packet size is %#x\n", handle->packet_size);
 
         /* if we need to allocate memory? */
         if (!handle->allocated) {
@@ -131,32 +128,22 @@ static int default_layout_make_packet(struct obex_layout_struct *handle, uint8_t
 
         ret = -EFAULT;
 
-        fprintf(stderr, "hdr->hi is %#x\n", hdrs->hi);
-
         /* set headers */
         iter = handle->p;
-        fprintf(stderr, "iter start at %#x\n", iter);
         iter += OBEX_PACKET_HDR_SIZE;
-        fprintf(stderr, "iter start at %#x\n", iter);
         iter = obex_hdr_ctor_inplace(iter, hdrs->hi, &hdrs->value);
         if (!iter)
                 goto exit_err_undo;
-        fprintf(stderr, "iter end at %#x\n", iter);
 
         /* set rest */
         ohdr_init_collect *entity;
         ohdr_init_collect_for_each_entry(entity, hdrs) {
-                fprintf(stderr, "entity->hi is %#x \n", entity->hi);
-                fprintf(stderr, "iter start at %#x\n", iter);
                 iter = obex_hdr_ctor_inplace(iter, entity->hi, &entity->value);
-                fprintf(stderr, "iter end at %#x\n", iter);
                 if (!iter)
                         goto exit_err_undo;
         }
-        putchar('\n');
-        fprintf(stderr, "iter end at %#x\n", iter);
+        ret = 0;
         return 0;
-
 
 exit_err_undo:
         if (local_allocated) {

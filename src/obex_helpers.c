@@ -5,8 +5,6 @@
 #include "obex_helpers.h"
 #include "obex_impl.h"
 
-#include <stdio.h>
-
 /**
  * generic_obex_send - generic send method.
  * @obex_sock:         socket
@@ -25,7 +23,6 @@ int generic_obex_send(int obex_sock, const obex_request_t *req, obex_response_t 
         ssize_t ret = 0;
         if (!res)
                 return -EINVAL;
-        fprintf(stderr, "ready to send %#x bytes\n", ntohs(req->packet_len_netord));
         ret = write(obex_sock, req, ntohs(req->packet_len_netord));
         if (ret <= 0)
                 return -EIO;
@@ -33,10 +30,8 @@ int generic_obex_send(int obex_sock, const obex_request_t *req, obex_response_t 
         if (ret <= 0)
                 return -EIO;
 
-        if (!tester(res)) {
-                fprintf(stderr, "test failed,peer returned %#x\n", *((uint8_t *)res));
+        if (!tester(res))
                 return -EBADMSG;
-        }
         return 0;
 }
 

@@ -145,20 +145,18 @@ void *obex_hdr_ctor_type_inplace(struct obex_header *hdr,
         fp = obex_hdr_visitor(hdr, OBEX_HDR_MEMBER0);
         *obex_hdr_fp_get_u16(&fp) = htons(hdr_size);
         fp = obex_hdr_visitor(hdr, OBEX_HDR_MEMBER1);
-        strncpy(obex_hdr_fp_get_u8(&fp), type_string, string_len);
+        strncpy(obex_hdr_fp_get_u8(&fp), type_string, string_len + 1);
         return (uint8_t *)hdr + hdr_size;
 }
 
-#include <stdio.h>
+
 
 void *obex_hdr_ctor_body_inplace(struct obex_header *hdr,
                                  const struct obex_hdr_initializer *value)
 {
         void *chunk = (void *)value->large_size_initializer;
         size_t chunk_size = value->initializer_size;
-        fprintf(stderr, "chunk size is %#x\n", chunk_size);
         size_t hdr_size = obex_hdr_compute_size(hdr->hi, chunk_size);
-        fprintf(stderr, "body hdr size is %#x\n", hdr_size);
         obex_hdr_field_pointer_t fp = {0};
         fp = obex_hdr_visitor(hdr, OBEX_HDR_MEMBER0);
         *obex_hdr_fp_get_u16(&fp) = htons(hdr_size);
