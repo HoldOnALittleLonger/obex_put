@@ -1,43 +1,29 @@
 #ifndef _OBEX_HELPERS_H_
 #define _OBEX_HELPERS_H_
 
-#include <stdio.h>
+#include <unistd.h>
+#include <stddef.h>
 
 #include "obex_packet_def.h"
-#include "obex_impl.h"
 
-#include "mime_type.h"
+/* flush opt data if has any */
+#define flush_obex_stream(__obex_sock, __rest_size)                             \
+        do {                                                                    \
+                uint8_t trash[128] = {0};                                       \
+                size_t __remain = __rest_size;                                  \
+                while (__remain) {                                              \
+                        size_t to_read = __remain < 128 ? __remain : 128;       \
+                        ssize_t __ret = read(__obex_sock, trash, to_read);      \
+                        if (__ret <= 0)                                         \
+                                break;                                          \
+                        __remain -= ret;                                        \
+                }                                                               \
+        } while (0)
 
 typedef bool (*obex_status_checker_t)(obex_response_t *);
-
-#define obex_test_res_code(__resp, __expect) ({ \
-        (__resp)->packet_code == __expect;      \
-        })
-
-/* the connection success code is 0xa0 */
-static inline bool obex_connect_ok(obex_response_t *res)
-{
-        uint8_t expect_code = OBEX_RESC_OK;
-        obex_set_final(&expect_code);
-        return obex_test_res_code(res, expect_code);
-}
-
-#define obex_is_success obex_connect_ok
-
-static inline bool obex_is_res_cont(obex_response_t *res)
-{
-        uint8_t expect_code = OBEX_RESC_CONT;
-        obex_set_final(&expect_code);
-        return obex_test_res_code(res, expect_code);
-}
-
-/* exchange object */
-extern int obex_try_connect(int obex_sock, uint8_t flags, uint16_t *packet_size);
-extern int obex_send_initial_put(int obex_sock, const char *file_name, size_t file_size,
-                                 void *first_chunk, size_t first_chunk_size,
-                                 enum MIME_TYPE t, int all);
-extern int obex_send_middle_put(int obex_sock, void *chunk, size_t chunk_size);
-extern int obex_send_final_put(int obex_sock);
-extern int obex_send_disconnect(int obex_sock);
+extern int generic_obex_send(int, const obex_request_t *, obex_response_t *, obex_status_checker_t);
+extern bool obex_status_is_ok(obex_response_t *);
+extern bool obex_status_is_cont(obex_response_t *);
+extern bool obex_status_bypass(obex_response_t *);
 
 #endif

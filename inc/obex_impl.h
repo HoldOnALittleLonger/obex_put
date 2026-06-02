@@ -1,3 +1,4 @@
+
 #ifndef _OBEX_IMPL_H_
 #define _OBEX_IMPL_H_
 
@@ -294,6 +295,11 @@ static inline void ohdr_init_collect_del(ohdr_init_collect *entity)
         list_del(&entity->list);
 }
 
+static inline ohdr_init_collect *ohdr_init_collect_next(ohdr_init_collect *entity)
+{
+        return list_entry(entity->list.next, ohdr_init_collect, list);
+}
+
 extern void destroy_whole_ohdr_init_collect(ohdr_init_collect *);
 
 /**
@@ -483,38 +489,6 @@ static inline void *obex_hdr_ctor_inplace_dispatcher(struct obex_header *hdr,
 
 extern void *obex_hdr_ctor_inplace(void *, uint8_t,
                                    const struct obex_hdr_initializer *);
-/**
- * return packet hdr size + data size 
- */
-#define obex_packet_compute_size(__data_size) ({ \
-        size_t __psize = OBEX_PACKET_HDR_SIZE    \
-                + (__data_size);                 \
-        __psize = __psize;                       \
-        })
-
-/* constructor of obex packet */
-static inline
-struct obex_packet *ctor_obex_packet(uint8_t code, size_t size)
-{
-        struct obex_packet *p = malloc(sizeof(uint8_t) * size);
-        if (!p)
-                return NULL;
-        p->packet_code = code;
-        p->packet_len_netord = htons(size);
-        return p;
-}
-
-/* destructor of obex packet */
-static inline
-void dtor_obex_packet(struct obex_packet *packet)
-{
-        free(packet);
-}
-
-//#define obex_set_bit(__uintvp, __bitn)            \
-//        do {                                        \
-//                (*__uintvp) |= (1U << (__bitn));    \
-//        } while (0)
 
 #define obex_set_final(__uint8vp)        \
         do {                             \

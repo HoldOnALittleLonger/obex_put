@@ -332,24 +332,26 @@ static inline bool um_time_after_time_t(time_t t1, time_t t2)
 #include <stdio.h>
 #include <stddef.h>
 
-void um_dump_mem(void *mem, size_t range, const char *msg)
+
+
+static inline void um_dump_mem(void *mem, size_t range, const char *msg)
 {
         unsigned short newline_cnt = 10;
-        fprintf(stderr, "[ ================ %s ================ ]\n",
+        fprintf(stderr, "\n[ ================ %s ================ ]\n",
                 __FUNCTION__);
         if (msg)
                 fprintf(stderr, "MSG: %s\n", msg);
-        setvbuf(0, stderr, NULL, _IOFBF, 0);
+        setvbuf(stderr, NULL, _IOFBF, 0);
         for (size_t iter = 0; iter < range; ++iter) {
-                fprintf(stderr, "%#8x ", mem[iter]);
+                fprintf(stderr, "%#04x ", ((uint8_t *)mem)[iter]);
                 if (!--newline_cnt) {
                         newline_cnt = 10;
                         fprintf(stderr, "\n");
                 }
         }
         fflush(stderr);
-        setlinebuf(stderr);
-        fprintf(stderr, "[ ================ CUT OFF ================ ]\n");
+        setvbuf(stderr, NULL, _IOLBF, 0);
+        fprintf(stderr, "\n[ ================ CUT OFF ================ ]\n");
 }
 
 #endif

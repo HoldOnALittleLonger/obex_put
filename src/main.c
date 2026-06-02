@@ -7,19 +7,15 @@
 #include <sys/socket.h>
 #include <errno.h>
 
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
-#include <bluetooth/rfcomm.h>
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
-#include "obex_packet_def.h"
-#include "obex_helpers.h"
+#include "obex_agent_data_def.h"
+#include "obex_agent.h"
 
-#define BLUETOOTH_MAX_CHANNELS 30
+#include "mime_type.h"
 
 /* 2^15 */
 //#define FILE_CHUNK_SIZE 32768
@@ -37,95 +33,86 @@ static void print_help_msg(void)
         printf("TODO: support SDP.\n");
 }
 
-static int start_object_transferring(int obex_sock, int fd, const char *file_name,
-                                     size_t file_size, size_t fbuffer_size,
-                                     enum MIME_TYPE mime)
+static size_t adjust_fbuffer_size(size_t expect, size_t curr, size_t reserve)
 {
-        int ret = 0;
-        void *fchunk = malloc(sizeof(uint8_t) * fbuffer_size);
-        if (!fchunk) {
-                perror("error: allocate file buffer failed.\n");
-                return -1;
+        if (expect < reserve)
+                return 0;
+        while (expect < curr + reserve) {
+                fprintf(stderr, "expect is %zu, curr is %zu, reserve is %zu, curr + reserve is %zu\n",
+                        expect, curr, reserve, curr + reserve);
+                curr /= 2;
         }
-        memset(fchunk, 0, fbuffer_size);
-        ret = read(fd, fchunk, fbuffer_size);
-        if (ret < 0) {
-                perror("error: read file failed.\n");
-                goto exit_err_free;
-        } else if (!ret) {
-                perror("error: file EOF at beginning.\n");
-                ret = -1;
-                goto exit_err_free;
-        }
-
-        int all = (ret == file_size);
-        printf("sending initial PUT.\n");
-        ret = obex_send_initial_put(obex_sock, file_name, file_size,
-                                    fchunk, ret, mime, all);
-        if (ret < 0) {
-                perror("error: send initial PUT message failed.\n");
-                ret = -1;
-                goto exit_err_free;
-        }
-
-        /* the first packet contains all thing */
-        if (all) {
-                ret = 0;
-                goto exit_err_free;
-        }
-
-        printf("sending rest object data.\n");
-        do {
-                ret = read(fd, fchunk, fbuffer_size);
-                if (ret < 0) {
-                        perror("error: read file failed.\n");
-                        goto exit_err_free;
-                }
-                if (!ret) /* EOF */
-                        break;
-
-                ret = obex_send_middle_put(obex_sock, fchunk, ret);
-                if (ret < 0) {
-                        perror("error: send object data failed.\n");
-                        goto exit_err_free;
-                }
-        } while (1);
-
-        printf("sending EOB.\n");
-        ret = obex_send_final_put(obex_sock);
-
-exit_err_free:
-        free(fchunk);
-        return ret;
+        return curr;
 }
 
-static int try_rfcomm_connect(const char *bt_address, uint8_t channel)
+static int start_object_transferring(int fd, const char *fname_nosuffix,
+                                     size_t file_size, const char *type,
+                                     const char *peer_addr, uint8_t channel)
 {
-        int ret_socket = -1;
-        struct sockaddr_rc rc_addr = {
-                .rc_family = AF_BLUETOOTH,
-                .rc_channel = channel,
-        };
-        str2ba(bt_address, &rc_addr.rc_bdaddr);
-        int rfcomm_sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-        if (rfcomm_sock < 0) {
-                perror("error: open bluetooth socket failed.\n");
-                fprintf(stderr, " - %s\n", strerror(errno));
-                return -1;
-        }
-        errno = 0;
-        if (connect(rfcomm_sock, (struct sockaddr *)&rc_addr, sizeof(rc_addr)) < 0) {
-                perror("error: try connect to channel failed.\n");
-                fprintf(stderr, " - channel: %u\n", channel);
-                fprintf(stderr, " - %s\n", strerror(errno));
-                goto exit_err_close;
-        }
-        printf("succeed connec to %s at channel %hu\n", bt_address, rc_addr.rc_channel);
-        return rfcomm_sock;
+        struct obex_connect_agent *cagent = NULL;
+        const struct obex_connect_agent_operations *caops = NULL;
+        struct obex_put_agent *pagent = NULL;
+        const struct obex_put_agent_operations *paops = NULL;
+        union obex_agent_data *pad = NULL;
+        const struct obex_pad_operations *padops = NULL;
 
-exit_err_close:
-        (void)shutdown(rfcomm_sock ,SHUT_RDWR);
-        return -1;
+        int ret = 0;
+        size_t fbsize = DEFAULT_OBEX_PACKET_SIZE;
+        size_t chunk_size = FILE_CHUNK_SIZE;
+        cagent = ctor_obex_ca(peer_addr, channel, 0, fbsize);
+        if (!cagent) {
+                fprintf(stderr, "error: Failed to start CONNECT Agent\n");
+                return -1;
+
+        }
+        caops = cagent->ca_ops;
+        ret = caops->connect(cagent, 1);
+        if (ret < 0) {
+                fprintf(stderr, "error: Failed to establish connection\n");
+                fprintf(stderr, "error: - %s\n", strerror(-1 * ret));
+                goto exit_dtor_cagent;
+        }
+        printf("Succeed to establish RFCOMM connection at channel %hu\n", channel);
+        printf("Peer expected packet size is %zu\n", cagent->packet_size);
+        fbsize = adjust_fbuffer_size(cagent->packet_size, chunk_size, OBEX_RESERVED_SIZE);
+        if (!fbsize) {
+                fprintf(stderr, "error: Bad file buffer size 0\n");
+                ret = -1;
+                goto exit_dtor_cagent;
+        }
+        printf("We select chunk size %zu\n", fbsize);
+
+        pagent = ctor_obex_pa();
+        if (!pagent) {
+                fprintf(stderr, "error: Failed to start PUT Agent\n");
+                ret = -1;
+                goto exit_dtor_cagent;
+        }
+        paops = pagent->pa_ops;
+        padops = pagent->pad_ops;
+        pad = &pagent->pad;
+        
+        paops->register_fd(pagent, fd);
+        paops->register_rfcommsock(pagent, cagent->rfcomm_socket);
+        
+        padops->mod_name(pad, fname_nosuffix);
+        padops->mod_type(pad, type);
+        padops->mod_length(pad, file_size);
+        padops->mod_chunk_size(pad, fbsize);
+
+        ret = paops->push_object(pagent);
+        if (ret < 0) {
+                fprintf(stderr, "error: Faild to send file\n");
+                fprintf(stderr, "- %s\n", strerror(-1 * ret));
+                fprintf(stderr, "Status: %#x\n", pagent->status_code);
+                ret = -1;
+        }
+
+        obex_pa_put(pagent);
+        
+exit_dtor_cagent:
+        obex_ca_put(cagent);
+        return ret;
 }
 
 static inline ssize_t get_file_size(const char *filepath)
@@ -137,14 +124,7 @@ static inline ssize_t get_file_size(const char *filepath)
         return S_ISREG(tmp.st_mode) ? tmp.st_size : -1;
 }
 
-static size_t adjust_fbuffer_size(size_t expect, size_t curr, size_t reserve)
-{
-        if (expect < reserve)
-                return 0;
-        while (expect < curr + reserve)
-                curr /= 2;
-        return curr;
-}
+
 
 int main(int argc, char *argv[])
 {
@@ -162,26 +142,15 @@ int main(int argc, char *argv[])
         const char *last_slash = strrchr(fpath, '/');
         const char *file_name = !last_slash ? fpath : last_slash + 1;
         if (*file_name == '\0') {
-                perror("error: do not support transfer directory.\n");
+                perror("error: Do not support transfer directory\n");
                 return -1;
         }
 
         enum MIME_TYPE mime;
         const char *psuffix = strrchr(file_name, '.');
         mime = suffix2mime(psuffix);
-        
+        const char *mime_type_str = get_mime_type(mime);
         uint8_t channel = atoi(push_channel);
-        if (!channel || channel > BLUETOOTH_MAX_CHANNELS) {
-                fprintf(stderr, "error: the channel %hu must in range [1, 30].\n",
-                        channel);
-                return -1;
-        }
-        
-        rfcomm_sock = try_rfcomm_connect(bt_addr, channel);
-        if (rfcomm_sock < 0) {
-                perror("error: all retry failed.\n");
-                return -1;
-        }
 
         /* file size */
         size_t fsize = get_file_size(fpath);
@@ -190,44 +159,23 @@ int main(int argc, char *argv[])
                 ret = -1;
                 goto exit_close;
         }
-        printf("target file's size is %lu bytes.\n", fsize);
+        printf("Target file's size is %lu bytes\n", fsize);
 
         /* open file */
         errno = 0;
         fd = open(fpath, O_RDONLY);
         if (fd < 0) {
-                fprintf(stderr, "error: open file %s failed.\n",
+                fprintf(stderr, "error: Open file %s failed\n",
                         fpath);
                 fprintf(stderr, " - %s\n", strerror(errno));
                 ret = -1;
                 goto exit_close;
         }
-
-        uint16_t fbsize = DEFAULT_OBEX_PACKET_SIZE;
-        printf("try connect to peer\n");
-        printf("default packet size is %hu\n", fbsize);
-        ret = obex_try_connect(rfcomm_sock, 0, &fbsize);
-        if (ret < 0) {
-                perror("error: connect failed.\n");
-                goto exit_close;
-        }
-        printf("peer expected packet size is %hu\n", fbsize);
-
-        fbsize = adjust_fbuffer_size(fbsize, FILE_CHUNK_SIZE, OBEX_RESERVED_SIZE);
-        if (!fbsize) {
-                perror("error: peer expecting packet size too small.\n");
-                ret = -1;
-                goto exit_close;
-        }
-        printf("final packet size is %hu\n", fbsize + OBEX_RESERVED_SIZE);
-        
-        ret = start_object_transferring(rfcomm_sock, fd, file_name, fsize,
-                                        fbsize, mime);
+        ret = start_object_transferring(fd, file_name, fsize,
+                                        mime_type_str, bt_addr, channel);
         if (ret < 0) {
                 perror("error: send object failed.\n");
         }
-
-        obex_send_disconnect(rfcomm_sock);
 
         printf("exit...\n");
 exit_close:

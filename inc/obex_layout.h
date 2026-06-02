@@ -7,23 +7,32 @@
 #include "obex_packet_def.h"
 #include "obex_impl.h"
 
+struct obex_layout_operations;
+/**
+ * obex_layout_struct - structure used to represents obex packet layout.
+ * @p:                  inner buffer
+ * @packet_size:        inner buffer size
+ * @p_get:              is @p acquired by other
+ * @allocated:          is @p valid
+ * @refcnt:             ref count
+ */
 struct obex_layout_struct {
         struct obex_packet *p;
         size_t packet_size;
         int p_get;
         int allocated;
-        int in_use;
-        const struct obex_layout_ops *lops;
+        int refcnt;
+        const struct obex_layout_operations *lops;
 };
 
-struct obex_layout_ops {
+struct obex_layout_operations {
         const struct obex_packet *(*get_packet)(struct obex_layout_struct *handle);
         struct obex_packet *(*get_packet_mutable)(struct obex_layout_struct *handle);
         void (*put_packet)(struct obex_layout_struct *handle);
-        int (*make_packet)(struct obex_layout_struct *handle, ohdr_init_collect *);
+        int (*make_packet)(struct obex_layout_struct *handle, uint8_t code, ohdr_init_collect *);
         int (*drop_packet)(struct obex_layout_struct *handle);
-        const struct obex_layout_ops *(*replace_ops)(struct obex_layout_struct *handle,
-                                                     struct obex_layout_ops *new);
+        const struct obex_layout_operations *(*replace_ops)(struct obex_layout_struct *handle,
+                                                     struct obex_layout_operations *new);
 };
 
 /*
@@ -43,35 +52,29 @@ static inline void dtor_obex_layout(struct obex_layout_struct *handle)
 
 static inline void get_layout(struct obex_layout_struct *layout)
 {
-        layout->in_use++;
+        layout->refcnt++;
 }
 
 static inline void put_layout(struct obex_layout_struct *layout)
 {
-        layout->in_use--;
-        if (!layout->in_use)
+        layout->refcnt--;
+        if (!layout->refcnt) {
                 dtor_obex_layout(layout);
+        }
 }
 
 /* friend function */
 static inline bool obex_layout_is_inuse(struct obex_layout_struct *handle)
 {
-        return handle->in_use > 0;
+        return handle->refcnt > 0;
 }
 
 static inline bool obex_layout_is_allocated(struct obex_layout_struct *handle)
 {
         return handle->allocated;
 }
-
-extern obex_request_t *obex_make_first_put_req(ohdr_init_collect *hdrs);
-extern obex_request_t *obex_make_rest_put(ohdr_init_collect *hdrs);
-
 extern void copy_obex_mini_connect(uint8_t, uint16_t, void *, uint8_t);
-
-
-/* destructor of CONNECT packet */
-#define dtor_obex_connect_request(__req) dtor_obex_packet(__req)
+extern const uint8_t obex_mini_eob_req[OBEX_PACKET_HDR_SIZE + OBEX_PACKET_HDR_SIZE];
 
 #define ctor_obex_minimal_disconnect_local(__name) \
         uint8_t __name##__buffer[OBEX_PACKET_HDR_SIZE] = {0}; \
