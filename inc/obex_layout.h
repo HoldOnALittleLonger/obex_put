@@ -1,3 +1,11 @@
+/**
+ * This header contains definition to layout.
+ * A layout is an abstracted sequence of bytes,
+ * to form a layout,the list of initializers is
+ * necessary.
+ * The layout also as a packet buffer can be used
+ * by operation agents.
+ */
 #ifndef _OBEX_LAYOUT_H_
 #define _OBEX_LAYOUT_H_
 
@@ -35,12 +43,6 @@ struct obex_layout_operations {
                                                      struct obex_layout_operations *new);
 };
 
-/*
-        int (*mini_put)(struct obex_layout_struct *handle, const char *name,
-                     const char *type, size_t length, void *chunk,
-                     size_t chunk_size, int all);
-*/
-
 /* ctor and dtor */
 extern struct obex_layout_struct *ctor_obex_layout(void);
 static inline void dtor_obex_layout(struct obex_layout_struct *handle)
@@ -63,7 +65,6 @@ static inline void put_layout(struct obex_layout_struct *layout)
         }
 }
 
-/* friend function */
 static inline bool obex_layout_is_inuse(struct obex_layout_struct *handle)
 {
         return handle->refcnt > 0;
@@ -73,6 +74,7 @@ static inline bool obex_layout_is_allocated(struct obex_layout_struct *handle)
 {
         return handle->allocated;
 }
+
 extern void copy_obex_mini_connect(uint8_t, uint16_t, void *, uint8_t);
 extern const uint8_t obex_mini_eob_req[OBEX_PACKET_HDR_SIZE + OBEX_PACKET_HDR_SIZE];
 
@@ -94,6 +96,7 @@ extern const uint8_t obex_mini_eob_req[OBEX_PACKET_HDR_SIZE + OBEX_PACKET_HDR_SI
 #define dtor_obex_minimal_response_local(__name)      \
         __name = NULL                                 \
 
+/* extractors */
 static inline uint8_t *obex_connect_vern(obex_request_t *connect_req)
 {
         return (uint8_t *)((uint8_t *)connect_req + OBEX_CONNECT_VERN_OFFSET);

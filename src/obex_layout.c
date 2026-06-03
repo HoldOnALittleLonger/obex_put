@@ -1,3 +1,5 @@
+#define UM_CONFIG_LIKELY
+
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
@@ -6,6 +8,11 @@
 #include "obex_impl.h"
 #include "obex_layout.h"
 
+#include "utility_macro.h"
+
+/**
+ * Account the total size of hdrs in initializer list
+ */
 static size_t accumulate_hdrs_size(ohdr_init_collect *hdrs)
 {
         size_t hdr_size = 0;
@@ -22,27 +29,13 @@ static size_t accumulate_hdrs_size(ohdr_init_collect *hdrs)
         return hdr_size;
 }
 
-/**
- * We build the first PUT packet from initializer list.
- *
- *            ... <-> body hdr <-> hdr1 <-> hdr2 <-> hdr3 <-> ...
- *                                 /        /        /
- *                                |        /        /
- *                                |       /        /
- *                                |      |        |
- *   first put => [ code | len | -------- hdrs -------- ]
- *                                                  #^ BODY hdr
- * # we do not checks @hdrs == NULL,caller must take care of
- *   that.
- */
-
 /* L                                            H */
 /* [ 0x80 | 0x00 0x07 | 0x10 | 0x00 | 0xff 0xff ] */
 static const uint8_t obex_mini_connect_req[OBEX_MINI_CONNECTREQ_SIZE] = {
         OBEX_REQC_CONNECT, 0x00, 0x07,
         OBEX_CURR_VERSION_NUM, 0x00,
-        MAX_OBEX_PACKET_SIZE,
-};
+        0x04, 0x00,
+}; /* default to 1024kB */
 
 /* deferene from minimal EOB request,we may need to configure
  * the connect request.
@@ -132,14 +125,14 @@ static int default_layout_make_packet(struct obex_layout_struct *handle, uint8_t
         iter = handle->p;
         iter += OBEX_PACKET_HDR_SIZE;
         iter = obex_hdr_ctor_inplace(iter, hdrs->hi, &hdrs->value);
-        if (!iter)
+        if (um_unlikely(!iter))
                 goto exit_err_undo;
 
         /* set rest */
         ohdr_init_collect *entity;
         ohdr_init_collect_for_each_entry(entity, hdrs) {
                 iter = obex_hdr_ctor_inplace(iter, entity->hi, &entity->value);
-                if (!iter)
+                if (um_unlikely(!iter))
                         goto exit_err_undo;
         }
         ret = 0;

@@ -1,4 +1,7 @@
+#define UM_CONFIG_LIKELY
+
 #include <unistd.h>
+#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <errno.h>
 
@@ -13,7 +16,7 @@
  * @res:               where to store response
  * @tester:            check whether peer returned good msg
  * return:             0 OR error code
- * # -EINVAL  => !@res
+ * # -EINVAL  => !@res OR zero size request
  *   -EIO     => write / read failed
  *   -EBADMSG => checking failed
  */
@@ -22,13 +25,22 @@ int generic_obex_send(int obex_sock, const obex_request_t *req, obex_response_t 
                       obex_status_checker_t tester, int flush_stream)
 {
         ssize_t ret = 0;
-        if (!res)
+        ssize_t send_remain_size = ntohs(req->packet_len_netord);
+        if (!res || um_unlikely(send_remain_size == 0))
                 return -EINVAL;
-        ret = write(obex_sock, req, ntohs(req->packet_len_netord));
-        if (ret <= 0)
-                return -EIO;
-        ret = read(obex_sock, res, OBEX_PACKET_HDR_SIZE);
-        if (ret <= 0)
+
+        const void *iter = req;
+        while (send_remain_size > 0) {
+                ret = send(obex_sock, iter, send_remain_size, 0);
+                if (ret <= 0)
+                        return -EIO;
+
+                /* advance */
+                iter += ret;
+                send_remain_size -= ret;
+        }
+        ret = recv(obex_sock, res, OBEX_PACKET_HDR_SIZE, 0);
+        if (um_unlikely(ret <= 0))
                 return -EIO;
         if (!tester(res))
                 return -EBADMSG;

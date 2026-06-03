@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200112L
 
+#define UM_CONFIG_LIKELY
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -14,6 +16,8 @@
 #include "obex_agent.h"
 
 #include "mime_type.h"
+
+#include "utility_macro.h"
 
 /**
  * 1 Page.
@@ -36,7 +40,7 @@ static void print_help_msg(void)
 
 static size_t adjust_fbuffer_size(size_t expect, size_t curr, size_t reserve)
 {
-        if (expect < reserve)
+        if (um_unlikely(expect < reserve))
                 return 0;
         while (expect < curr + reserve) {
                 fprintf(stderr, "expect is %zu, curr is %zu, reserve is %zu, curr + reserve is %zu\n",
@@ -71,15 +75,15 @@ static int start_object_transferring(int fd, const char *fname, size_t fsize,
         if (ret < 0) {
                 fprintf(stderr, "error: Failed to establish connection\n");
                 fprintf(stderr, "error: - %s\n", strerror(-1 * ret));
-                goto exit_put_cagent;
+                goto exit_no_connect;
         }
         printf("Succeed to establish RFCOMM connection at channel %hu\n", channel);
-        printf("Peer expected packet size is %zu\n", cagent->packet_size);
-        fbsize = adjust_fbuffer_size(cagent->packet_size, chunk_size, OBEX_RESERVED_SIZE);
-        if (!fbsize) {
+        printf("Peer expected packet size is %zu\n", cagent->mtu);
+        fbsize = adjust_fbuffer_size(cagent->mtu, chunk_size, OBEX_RESERVED_SIZE);
+        if (um_unlikely(!fbsize)) {
                 fprintf(stderr, "error: Bad file buffer size 0\n");
                 ret = -1;
-                goto exit_put_cagent;
+                goto exit_disconnect;
         }
         printf("We select chunk size %zu\n", fbsize);
 
@@ -87,20 +91,25 @@ static int start_object_transferring(int fd, const char *fname, size_t fsize,
         if (!pagent) {
                 fprintf(stderr, "error: Failed to start PUT Agent\n");
                 ret = -1;
-                goto exit_put_cagent;
+                goto exit_disconnect;
         }
         paops = pagent->pa_ops;
         padops = pagent->pad_ops;
         pad = &pagent->pad;
         
         paops->register_fd(pagent, fd);
-        paops->register_rfcommsock(pagent, cagent->rfcomm_socket);
 
         padops->mod_name(pad, fname);
         padops->mod_type(pad, NULL);
         padops->mod_type(pad, type);
         padops->mod_length(pad, fsize);
         padops->mod_chunk_size(pad, fbsize);
+        ret = paops->reside_on(pagent, cagent);
+        if (um_unlikely(ret < 0)) {
+                fprintf(stderr, "Make use of connection failed\n");
+                fprintf(stderr, "- %s\n", strerror(-1 * ret));
+                goto exit_no_reside;
+        }
 
         ret = paops->push_object(pagent);
         if (ret < 0) {
@@ -110,12 +119,16 @@ static int start_object_transferring(int fd, const char *fname, size_t fsize,
                 ret = -1;
         }
 
-        obex_pa_put(pagent);
+        paops->go_away(pagent);
+
+exit_no_reside:
+        dtor_obex_pa(pagent);
         
-exit_put_cagent:
-        if (cagent->rfcomm_socket)
-                caops->disconnect(cagent);
-        obex_ca_put(cagent);
+exit_disconnect:
+        caops->disconnect(cagent);
+
+exit_no_connect:
+        dtor_obex_ca(cagent);
         return ret;
 }
 
@@ -156,7 +169,7 @@ int main(int argc, char *argv[])
 
         /* file size */
         size_t fsize = get_file_size(fpath);
-        if (fsize < 0) {
+        if (um_unlikely(fsize < 0)) {
                 perror("error: Failed to get file size or is not regular file\n");
                 ret = -1;
                 goto exit_close;

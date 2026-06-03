@@ -1,3 +1,7 @@
+/**
+ * This header contains definitions to helper routines
+ * that may be used by agents.
+ */
 #ifndef _OBEX_HELPERS_H_
 #define _OBEX_HELPERS_H_
 
@@ -13,7 +17,7 @@
                 size_t __remain = __rest_size;                                  \
                 while (__remain) {                                              \
                         size_t to_read = __remain < 128 ? __remain : 128;       \
-                        ssize_t __ret = read(__obex_sock, trash, to_read);      \
+                        ssize_t __ret = recv(__obex_sock, trash, to_read, 0);   \
                         if (__ret <= 0)                                         \
                                 break;                                          \
                         __remain -= __ret;                                      \

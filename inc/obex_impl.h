@@ -1,19 +1,8 @@
-
-#ifndef _OBEX_IMPL_H_
-#define _OBEX_IMPL_H_
-
-#include <arpa/inet.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <assert.h>
-
-#include "obex_packet_def.h"
-
-#define UM_CONFIG_CONTAINER_OF
-#include "utility_macro.h"
-#include "list_head.h"
-
 /**
+ * This header contains definitions to implementations for
+ * OBEX hdrs,and contains some useful routines,they describes
+ * how to build the message of a given header identifier.
+ *
  * There are four possible patterns of the obex header.
  *   00 => 1B hi + 2B length + UTF-16BE string(null terminate)
  *   01 => 1B hi + 2B length + Byte sequence(null terminate)
@@ -113,6 +102,20 @@
  * Now,we no longer need the size definitions of each fields
  * of each header type.
  */
+#ifndef _OBEX_IMPL_H_
+#define _OBEX_IMPL_H_
+
+#include <arpa/inet.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <assert.h>
+
+#include "obex_packet_def.h"
+
+#define UM_CONFIG_CONTAINER_OF
+#include "utility_macro.h"
+#include "list_head.h"
+
 
 /* invariant size */
 #define OBEX_HDR_HI_SIZE 1U
@@ -203,10 +206,18 @@ struct obex_hdr_initializer {
         };
 };
 
+
 extern size_t obex_hdr_probe_size(uint8_t, enum obex_hdr_pattern,
                                   const struct obex_hdr_initializer *);
-
-/* probe value size */
+/**
+ * obex_hdr_probe_initializer_size - routine to probes size of hdr in
+ *                                   initializer list,this is useful when layout
+ *                                   needs to know the size before allocate packet
+ *                                   buffer.
+ * @hi:                              header identifier
+ * @v:                               pointer to initializer
+ * return:                           size to the hdr
+ */
 static inline size_t obex_hdr_probe_initializer_size(uint8_t hi,
                                                      const struct obex_hdr_initializer *v)
 {
@@ -308,7 +319,6 @@ extern void destroy_whole_ohdr_init_collect(ohdr_init_collect *);
  */
 #define ohdr_init_collect_for_each_entry(__entryp, __headp) \
         list_for_each_entry(__entryp, &(__headp)->list, list)
-
 
 
 /* 00 size => UTF-16BE */
@@ -494,49 +504,5 @@ extern void *obex_hdr_ctor_inplace(void *, uint8_t,
         do {                             \
                 *(__uint8vp) |= 0x80;    \
         } while (0)
-
-/**
- *                     |<-------- hv ------->|
- * NAME header => [ hi | length | text | '\0 ]
- *                  1    2        VAR    1
- * Size = 1 + 2 + VAR + 1
- * @name convert to UTF-16BE
- */
-
-/**
- *                     |<-------- hv ------->|
- * TYPE header => [ hi | length | text | '\0 ]
- *                  1    2        VAR    1
- * Size = 1 + 2 + VAR + 1
- * @type reamin UTF-8
- */
-
-/**
- *                       |<- hv ->|
- * LENGTH header => [ hi | length ]
- *                    1    4
- * Size = 1 + 4
- */
-
-/**
- *                     |<---------- hv ------>|
- * BODY header => [ hi | length | content ... ]
- *                  1    2        VAR
- * Size = 1 + 2 + VAR
- */
-
-/**
- *                          |<-------- hv -------->|
- * END OF BODY head => [ hi | length | content ... ]
- *                       1    2        VAR
- * Size = 1 + 2 + VAR
- *
- * @length can be set to 0,when the @content is
- * not contains valid data.
- * we can simply set hi to END OF BODY,and fill
- * the remain with zero.
- * if @content contains valid data,@length must
- * ot be zero.
- */
 
 #endif /* obex_impl.h */

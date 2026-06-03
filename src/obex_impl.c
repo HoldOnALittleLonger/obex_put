@@ -1,3 +1,6 @@
+#define UM_CONFIG_LIKELY
+#define UM_CONFIG_CONTAINER_OF
+
 #include <arpa/inet.h>
 #include <stdint.h>
 #include <string.h>
@@ -6,7 +9,7 @@
 #include "obex_packet_def.h"
 #include "obex_impl.h"
 
-#define UM_CONFIG_CONTAINER_OF
+
 #include "utility_macro.h"
 #include "list_head.h"
 
@@ -110,7 +113,7 @@ void *obex_hdr_ctor_name_inplace(struct obex_header *hdr,
         char *buff_iter = utf16_be_buff;
         size_t buffer_size = utf16_buff_size;
         iconv_t filter = iconv_open("UTF-16BE", "UTF-8");
-        if (filter == (iconv_t)-1)
+        if (um_unlikely(filter == (iconv_t)-1))
                 goto exit_err_free;
 
         /* include null terminate */

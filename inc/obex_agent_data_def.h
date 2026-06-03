@@ -1,8 +1,18 @@
+/**
+ * This header contains some subset of available OBEX hdrs.
+ * The subsets are wrapped into an union.The agent should
+ * only operates the hdrs in a subset that is needed by 
+ * current operation.
+ */
 #ifndef _OBEX_AGENT_DATA_H_
 #define _OBEX_AGENT_DATA_H_
 
 #include "obex_impl.h"
 
+/**
+ * obex_agent_data - agent data,must be operates via a
+ *                   specified operation set
+ */
 union obex_agent_data {
         struct {
                 uint32_t cad_connectid;

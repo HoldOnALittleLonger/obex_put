@@ -16,9 +16,8 @@ Usage
 Addition
 ========     
 
-Only "txt", "jpg", "png" file formats are supporting now.
-Need to keep the file name suffix as the same to the file
-format,because @obex_put use the suffix to determines the
+Need to keep the file name suffix as the same as the file
+format,because @obex_put use the suffix to determines file's
 MIME type.
 
 Environment

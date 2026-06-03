@@ -1,9 +1,15 @@
+/**
+ * This header contains supported mime type enumerators.
+ */
 #ifndef _MIME_TYPE_H_
 #define _MIME_TYPE_H_
 
 #include <assert.h>
 #include <stddef.h>
 
+/**
+ * MIME_TYPE - enumeration type for mime types
+ */
 enum MIME_TYPE {
         MIMET_TXT,
         MIMET_JPG,

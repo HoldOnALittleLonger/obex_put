@@ -52,7 +52,7 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
         req_packet = (struct obex_packet *)mini_connect_packet;
         if (minimal) {
                 /* fast path */
-                copy_obex_mini_connect(agent->flags, agent->packet_size,
+                copy_obex_mini_connect(agent->flags, agent->mtu,
                                        req_packet, OBEX_MINI_CONNECTREQ_SIZE);
                 ret = generic_obex_send(socketfd, req_packet, (obex_request_t *)res_buff, obex_status_is_ok, 0);
         }
@@ -107,7 +107,7 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
 
                 /* connected */
                 agent->rfcomm_socket = socketfd;
-                agent->packet_size = *obex_connect_mpsize(res);
+                agent->mtu = *obex_connect_mpsize(res);
                 agent->connected = 1;
                 ret = 0;
         }
@@ -132,6 +132,25 @@ static void default_ca_disconnect(struct obex_connect_agent *agent)
         agent->rfcomm_socket = -1;
         agent->connected = 0;
         dtor_obex_minimal_disconnect_local(disconnect_req);
+}
+
+int default_ca_attach(struct obex_connect_agent *agent, void *op)
+{
+        if (agent->attached)
+                return -EBUSY;
+
+        agent->attached = 1;
+        agent->private = op;
+        return 0;
+}
+
+int default_ca_deattach(struct obex_connect_agent *agent)
+{
+        if (!agent->attached)
+                return -EINVAL;
+        agent->attached = 0;
+        agent->private = NULL;
+        return 0;
 }
 
 static int default_ca_mod_channel(struct obex_connect_agent *agent, uint8_t new_channel)
@@ -162,23 +181,26 @@ static int default_ca_mod_peer_addr(struct obex_connect_agent *agent,
 const struct obex_connect_agent_operations default_obex_ca_ops = {
         .connect = default_ca_connect,
         .disconnect = default_ca_disconnect,
+        .attach = default_ca_attach,
+        .deattach = default_ca_deattach,
         .mod_channel = default_ca_mod_channel,
         .mod_peer_addr = default_ca_mod_peer_addr,
 };
 
 /* ctor to connect agent */
 struct obex_connect_agent *ctor_obex_ca(const char *bt_addr, uint8_t channel,
-                                        uint8_t flags, uint16_t packet_size)
+                                        uint8_t flags, uint16_t mtu)
 {
         struct obex_connect_agent *agent = malloc(sizeof(struct obex_connect_agent));
         if (agent) {
                 agent->peer_bt_addr = bt_addr;
-                agent->packet_size = packet_size;
+                agent->mtu = mtu;
                 agent->service_channel = channel;
                 agent->flags = flags;
                 agent->rfcomm_socket = -1;
-                agent->refcnt = 1;
                 agent->connected = 0;
+                agent->attached = 0;
+                agent->private = NULL;
                 agent->ca_ops = &default_obex_ca_ops;
                 agent->cad_ops = &default_obex_cad_ops;
 
@@ -195,18 +217,9 @@ struct obex_connect_agent *ctor_obex_ca(const char *bt_addr, uint8_t channel,
  */
 static int default_pa_register_fd(struct obex_put_agent *agent, int fd)
 {
-        if (agent->fd_user)
-                return -EBUSY;
+        int old = agent->registered_fd;
         agent->registered_fd = fd;
-        return 0;
-}
-
-static int default_pa_register_rfcommsock(struct obex_put_agent *agent, int fd)
-{
-        if (agent->fd_user)
-                return -EBUSY;
-        agent->registered_rfcommsock = fd;
-        return 0;
+        return old;
 }
 
 static int default_pa_push_object(struct obex_put_agent *agent)
@@ -224,14 +237,11 @@ static int default_pa_push_object(struct obex_put_agent *agent)
         size_t chunk_size = padops->mod_chunk_size(pad, 0);
         int socket_fd = -1, fd = -1;
 
-        /**
-         * RCU read-side start point.
-         * We now dont think of multithread.
-         */
-        agent->fd_user++;
-        socket_fd = agent->registered_rfcommsock;
+        if (!agent->residing)
+                return -ENODEV;
+
         fd = agent->registered_fd;
-        agent->fd_user--;
+        socket_fd = agent->residing->rfcomm_socket;
         
         if (socket_fd < 0 || fd < 0)
                 return -EIO;
@@ -297,10 +307,39 @@ exit_err:
         return ret;
 }
 
+static int default_pa_reside_on(struct obex_put_agent *agent, struct obex_connect_agent *cagent)
+{
+        int ret = 0;
+        const struct obex_connect_agent_operations *caops = NULL;
+        if (agent->residing)
+                return -EINVAL;
+        caops = cagent->ca_ops;
+        caops->attach(cagent, agent);
+        agent->residing = cagent;
+        return 0;
+}
+
+static int default_pa_go_away(struct obex_put_agent *agent)
+{
+        struct obex_connect_agent *cagent = agent->residing;
+        const struct obex_connect_agent_operations *caops = NULL;
+        int ret = 0;
+
+        if (!cagent)
+                return -EINVAL;
+        caops = cagent->ca_ops;
+        ret = caops->deattach(cagent);
+        if (ret < 0)
+                return ret;
+        agent->residing = NULL;
+        return 0;
+}
+
 const struct obex_put_agent_operations default_pa_ops = {
         .register_fd = default_pa_register_fd,
-        .register_rfcommsock = default_pa_register_rfcommsock,
         .push_object = default_pa_push_object,
+        .reside_on = default_pa_reside_on,
+        .go_away = default_pa_go_away,
 };
 
 struct obex_put_agent *ctor_obex_pa(void)
@@ -308,10 +347,8 @@ struct obex_put_agent *ctor_obex_pa(void)
         struct obex_put_agent *pa = malloc(sizeof(struct obex_put_agent));
         if (pa) {
                 pa->registered_fd = -1;
-                pa->registered_rfcommsock = -1;
                 pa->status_code = 0;
-                pa->fd_user = 0;
-                pa->refcnt = 1;
+                pa->residing = NULL;
                 pa->pa_ops = &default_pa_ops;
                 pa->pad_ops = &default_obex_pad_ops;
                 union obex_agent_data tmp = {0};

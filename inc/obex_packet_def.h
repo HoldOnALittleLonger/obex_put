@@ -1,3 +1,7 @@
+/**
+ * This header contains definitions to OBEX head identifiers,
+ * request codes,and response codes.
+ */
 #ifndef _OBEX_PACKET_H_
 #define _OBEX_PACKET_H_
 
