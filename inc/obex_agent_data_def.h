@@ -53,7 +53,7 @@ struct obex_pad_operations {
         void *(*mod_chunk)(union obex_agent_data *, void *);
         size_t (*mod_chunk_size)(union obex_agent_data *, size_t);
         ohdr_init_collect *(*to_hdrs)(union obex_agent_data *);
-        void (*destroy_all_hdrs)(ohdr_init_collect *);
+        void (*destroy_hdrs)(ohdr_init_collect *);
 };
 
 extern const struct obex_cad_operations default_obex_cad_ops;

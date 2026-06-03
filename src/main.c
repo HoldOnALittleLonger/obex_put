@@ -4,10 +4,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <errno.h>
 
-#include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -17,9 +15,12 @@
 
 #include "mime_type.h"
 
-/* 2^15 */
-//#define FILE_CHUNK_SIZE 32768
-#define FILE_CHUNK_SIZE 8192
+/**
+ * 1 Page.
+ * If the packet transferred to peer is too large,
+ * then unexpected error may happens.
+ */
+#define FILE_CHUNK_SIZE 4096
 
 #define OBEX_RESERVED_SIZE 128
 /* 33280 B */
@@ -96,6 +97,7 @@ static int start_object_transferring(int fd, const char *fname, size_t fsize,
         paops->register_rfcommsock(pagent, cagent->rfcomm_socket);
 
         padops->mod_name(pad, fname);
+        padops->mod_type(pad, NULL);
         padops->mod_type(pad, type);
         padops->mod_length(pad, fsize);
         padops->mod_chunk_size(pad, fbsize);

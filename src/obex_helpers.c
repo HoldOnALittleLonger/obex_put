@@ -4,6 +4,7 @@
 
 #include "obex_helpers.h"
 #include "obex_impl.h"
+#include "obex_layout.h"
 
 /**
  * generic_obex_send - generic send method.
@@ -18,7 +19,7 @@
  */
 
 int generic_obex_send(int obex_sock, const obex_request_t *req, obex_response_t *res,
-                      obex_status_checker_t tester)
+                      obex_status_checker_t tester, int flush_stream)
 {
         ssize_t ret = 0;
         if (!res)
@@ -29,9 +30,26 @@ int generic_obex_send(int obex_sock, const obex_request_t *req, obex_response_t 
         ret = read(obex_sock, res, OBEX_PACKET_HDR_SIZE);
         if (ret <= 0)
                 return -EIO;
-
         if (!tester(res))
                 return -EBADMSG;
+
+        /**
+         * We need to flush stream to drop the data we do not care about.
+         * This is important,if we didnt,the behavior may weird.
+         * When PUT is send,the send PUT message will get 0xcb,but that
+         * error status is not means we really less LENGTH header.(sometimes,right)
+         * Because we did not flush the stream,thus receiver will packet data
+         * that mixed with the old data.
+         * We can dump memory in User Mode,but all thing seems like OK,but
+         * in Kernel Mode,that is not good.
+         */
+        if (flush_stream) {
+                uint16_t rest_size = *(uint16_t *)((uint8_t *)res + 1);
+                rest_size = ntohs(rest_size);
+                rest_size -= ret;
+                flush_obex_stream(obex_sock, rest_size);
+        }
+        
         return 0;
 }
 

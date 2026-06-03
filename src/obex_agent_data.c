@@ -193,18 +193,18 @@ static ohdr_init_collect *default_pad_to_hdrs(union obex_agent_data *pad)
                         goto exit_free_all;
                 ohdr_init_collect_add(tmp, dummy);
         }
-
-        if (pad->pad_type) {
-                v = ctor_obex_hdr_initializer((uint64_t)pad->pad_type, 1, 0);
-                tmp = ctor_ohdr_init_collect(OBEX_HI_TYPE, &v);
+        
+        if (pad->pad_length > 0) {
+                v = ctor_obex_hdr_initializer((uint64_t)pad->pad_length, 1, 0);
+                tmp = ctor_ohdr_init_collect(OBEX_HI_LENGTH, &v);
                 if (!tmp)
                         goto exit_free_all;
                 ohdr_init_collect_add(tmp, dummy);
         }
 
-        if (pad->pad_length > 0) {
-                v = ctor_obex_hdr_initializer((uint64_t)pad->pad_length, 1, 0);
-                tmp = ctor_ohdr_init_collect(OBEX_HI_LENGTH, &v);
+        if (pad->pad_type) {
+                v = ctor_obex_hdr_initializer((uint64_t)pad->pad_type, 1, 0);
+                tmp = ctor_ohdr_init_collect(OBEX_HI_TYPE, &v);
                 if (!tmp)
                         goto exit_free_all;
                 ohdr_init_collect_add(tmp, dummy);
@@ -238,6 +238,6 @@ const struct obex_pad_operations default_obex_pad_ops = {
         .mod_chunk = default_pad_mod_chunk,
         .mod_chunk_size = default_pad_mod_chunk_size,
         .to_hdrs = default_pad_to_hdrs,
-        .destroy_all_hdrs = destroy_whole_ohdr_init_collect,
+        .destroy_hdrs = destroy_whole_ohdr_init_collect,
 };
                                               

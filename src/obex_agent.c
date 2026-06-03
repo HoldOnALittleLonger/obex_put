@@ -15,7 +15,6 @@
 #include "obex_helpers.h"
 #include "obex_impl.h"
 
-
 /**
  * =============
  * CONNECT Agent
@@ -55,7 +54,7 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
                 /* fast path */
                 copy_obex_mini_connect(agent->flags, agent->packet_size,
                                        req_packet, OBEX_MINI_CONNECTREQ_SIZE);
-                ret = generic_obex_send(socketfd, req_packet, (obex_request_t *)res_buff, obex_status_is_ok);
+                ret = generic_obex_send(socketfd, req_packet, (obex_request_t *)res_buff, obex_status_is_ok, 0);
         }
         else {
                 /* slow path */
@@ -70,20 +69,18 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
 
                 hdrs = cadops->to_hdrs(&agent->cad);
                 if (!hdrs) {
-                        ret = -ENOMEM;
+                        ret = -EFAULT;
                         goto failed_put_layout;
                 }
 
                 ret = lops->make_packet(layout, OBEX_REQC_CONNECT, hdrs);
                 /* after we built packet,we can destroy hdrs */
                 cadops->destroy_hdrs(hdrs);
-                if (ret < 0) {
-                        ret = -ENOMEM;
+                if (ret < 0)
                         goto failed_put_layout;
-                }
-                
+
                 req_packet = lops->get_packet_mutable(layout);
-                ret = generic_obex_send(socketfd, req_packet, (obex_request_t *)res_buff, obex_status_is_ok);
+                ret = generic_obex_send(socketfd, req_packet, (obex_request_t *)res_buff, obex_status_is_ok, 0);
                 lops->put_packet(layout);
                 
         failed_put_layout:
@@ -130,7 +127,7 @@ static void default_ca_disconnect(struct obex_connect_agent *agent)
 
         uint8_t mini_res[OBEX_PACKET_HDR_SIZE] = {0};
         ctor_obex_minimal_disconnect_local(disconnect_req);
-        generic_obex_send(agent->rfcomm_socket, disconnect_req, (obex_request_t *)mini_res, obex_status_bypass);
+        generic_obex_send(agent->rfcomm_socket, disconnect_req, (obex_request_t *)mini_res, obex_status_bypass, 0);
         shutdown(agent->rfcomm_socket, SHUT_RDWR);
         agent->rfcomm_socket = -1;
         agent->connected = 0;
@@ -267,17 +264,16 @@ static int default_pa_push_object(struct obex_put_agent *agent)
                 if (!hdrs)
                         goto exit_put_layout;
                 else if (!remove_useless_pad) {
-                        padops->mod_connectid(pad, 0);
                         padops->mod_name(pad, NULL);
-                        padops->mod_type(pad, NULL);
                         padops->mod_length(pad, 0);
+                        padops->mod_type(pad, NULL);
                         remove_useless_pad = 1;
                 }
 
                 ret = lops->make_packet(layout, OBEX_REQC_PUT, hdrs);
-                padops->destroy_all_hdrs(hdrs);
+                padops->destroy_hdrs(hdrs);
                 packet = lops->get_packet(layout);
-                ret = generic_obex_send(socket_fd, packet, res, obex_status_is_cont);
+                ret = generic_obex_send(socket_fd, packet, res, obex_status_is_cont, 1);
                 lops->put_packet(layout);
                 agent->status_code = res->packet_code;
                 if (ret < 0)
@@ -286,7 +282,7 @@ static int default_pa_push_object(struct obex_put_agent *agent)
         } while (1);
 
         const obex_request_t *eob_packet = (const obex_request_t *)obex_mini_eob_req;
-        ret = generic_obex_send(socket_fd, eob_packet, res, obex_status_is_ok);
+        ret = generic_obex_send(socket_fd, eob_packet, res, obex_status_is_ok, 1);
         agent->status_code = res->packet_code;
         if (ret < 0)
                 ret = -EIO;

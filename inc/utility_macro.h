@@ -330,12 +330,9 @@ static inline bool um_time_after_time_t(time_t t1, time_t t2)
 
 #if defined(UM_CONFIG_DUMP)
 #include <stdio.h>
-#include <stddef.h>
+#include <stdint.h>
 
-#ifndef UM_DUMP_MEM
-#define UM_DUMP_MEM
-
-void um_dump_mem(void *mem, size_t range, const char *msg)
+static inline void um_dump_mem(void *mem, size_t range, const char *msg)
 {
         unsigned short newline_cnt = 8;
         fprintf(stderr, "\n[ ================================ %s ================================ ]\n",
@@ -343,19 +340,18 @@ void um_dump_mem(void *mem, size_t range, const char *msg)
         if (msg)
                 fprintf(stderr, "MSG: %s\n", msg);
         setvbuf(stderr, NULL, _IOFBF, 0);
+        fprintf(stderr, "  ");
         for (size_t iter = 0; iter < range; ++iter) {
                 fprintf(stderr, "%#08x ", ((uint8_t *)mem)[iter]);
                 if (!--newline_cnt) {
                         newline_cnt = 8;
                         fprintf(stderr, "\n");
+                        fprintf(stderr, "  ");
                 }
         }
         setvbuf(stderr, NULL, _IOLBF, 0);
         fprintf(stderr, "\n[ ================================ CUT OFF ================================ ]\n");
 }
-#else
-extern void um_dump_mem(void *, size_t, const char *);
-#endif
 
 #endif
 

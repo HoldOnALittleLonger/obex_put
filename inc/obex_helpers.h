@@ -16,12 +16,13 @@
                         ssize_t __ret = read(__obex_sock, trash, to_read);      \
                         if (__ret <= 0)                                         \
                                 break;                                          \
-                        __remain -= ret;                                        \
+                        __remain -= __ret;                                      \
                 }                                                               \
         } while (0)
 
 typedef bool (*obex_status_checker_t)(obex_response_t *);
-extern int generic_obex_send(int, const obex_request_t *, obex_response_t *, obex_status_checker_t);
+extern int generic_obex_send(int, const obex_request_t *, obex_response_t *,
+                             obex_status_checker_t, int);
 extern bool obex_status_is_ok(obex_response_t *);
 extern bool obex_status_is_cont(obex_response_t *);
 extern bool obex_status_bypass(obex_response_t *);
