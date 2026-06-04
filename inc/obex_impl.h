@@ -206,25 +206,6 @@ struct obex_hdr_initializer {
         };
 };
 
-
-extern size_t obex_hdr_probe_size(uint8_t, enum obex_hdr_pattern,
-                                  const struct obex_hdr_initializer *);
-/**
- * obex_hdr_probe_initializer_size - routine to probes size of hdr in
- *                                   initializer list,this is useful when layout
- *                                   needs to know the size before allocate packet
- *                                   buffer.
- * @hi:                              header identifier
- * @v:                               pointer to initializer
- * return:                           size to the hdr
- */
-static inline size_t obex_hdr_probe_initializer_size(uint8_t hi,
-                                                     const struct obex_hdr_initializer *v)
-{
-        enum obex_hdr_pattern p = obex_hdr_pattern_mapper(hi);
-        return obex_hdr_probe_size(hi, p, v);
-}
-
 /**
  * ctor_obex_hdr_initializer - constructor of obex hdr initializer type
  * @value:                     inner value
@@ -251,6 +232,24 @@ ctor_obex_hdr_initializer(uint64_t value, uint8_t is_small, size_t value_size)
                 };
                 return x;
         }
+}
+
+extern size_t obex_hdr_probe_size(uint8_t, enum obex_hdr_pattern,
+                                  const struct obex_hdr_initializer *);
+/**
+ * obex_hdr_probe_initializer_size - routine to probes size of hdr in
+ *                                   initializer list,this is useful when layout
+ *                                   needs to know the size before allocate packet
+ *                                   buffer.
+ * @hi:                              header identifier
+ * @v:                               pointer to initializer
+ * return:                           size to the hdr
+ */
+static inline size_t obex_hdr_probe_initializer_size(uint8_t hi,
+                                                     const struct obex_hdr_initializer *v)
+{
+        enum obex_hdr_pattern p = obex_hdr_pattern_mapper(hi);
+        return obex_hdr_probe_size(hi, p, v);
 }
 
 /**
@@ -422,81 +421,18 @@ static inline size_t obex_hdr_value_size(const struct obex_header *hdr,
         }
 }
 
-extern void *obex_hdr_ctor_name_inplace(struct obex_header *,
-                                        const struct obex_hdr_initializer *);
-/* 00 dispatcher */
-static void *obex_hdr_ctor_pattern_00_dispatcher(struct obex_header *hdr,
-                                                 const struct obex_hdr_initializer *value)
-{
-        switch (hdr->hi) {
-        case OBEX_HI_NAME:
-                return obex_hdr_ctor_name_inplace(hdr, value);
-        default:
-                assert(0); 
-        }
-}
+/**
+ * OBEX_HDR_CTOR_INPLACE_DEFINE - macro to describes the uniform for hdr inplace
+ *                                constructors
+ * @hdr:                          header start position
+ * @value:                        value used to initialize header
+ * return:                        address next to the end of the been filled header
+ */
+#define OBEX_HDR_CTOR_INPLACE_DEFINE(__hdrname)                            \
+        void *obex_hdr_ctor_##__hdrname##_inplace(struct obex_header *hdr, \
+                                                  const struct obex_hdr_initializer *value)
 
-extern void *obex_hdr_ctor_type_inplace(struct obex_header *,
-                                        const struct obex_hdr_initializer *);
-extern void *obex_hdr_ctor_body_inplace(struct obex_header *hdr,
-                                        const struct obex_hdr_initializer *);
-/* 01 dispatcher */
-static void *obex_hdr_ctor_pattern_01_dispatcher(struct obex_header *hdr,
-                                                 const struct obex_hdr_initializer *value)
-{
-        switch (hdr->hi) {
-        case OBEX_HI_BODY:
-        case OBEX_HI_EOB:
-                return obex_hdr_ctor_body_inplace(hdr, value);
-        case OBEX_HI_TYPE:
-                return obex_hdr_ctor_type_inplace(hdr, value);
-        default:
-                assert(0);
-        }
-}
-
-/* un-implemented */
-static void *obex_hdr_ctor_pattern_10_dispatcher(struct obex_header *hdr,
-                                                 const struct obex_hdr_initializer *value)
-{
-        switch (hdr->hi) {
-        default:
-                assert(0);
-        }
-}
-
-extern void *obex_hdr_ctor_length_inplace(struct obex_header *hdr,
-                                          const struct obex_hdr_initializer *);
-/* 11 dispatcher */
-static void *obex_hdr_ctor_pattern_11_dispatcher(struct obex_header *hdr,
-                                                 const struct obex_hdr_initializer *value)
-{
-        switch (hdr->hi) {
-        case OBEX_HI_LENGTH:
-                return obex_hdr_ctor_length_inplace(hdr, value);
-        default:
-                assert(0);
-        }
-}
-
-/* inplace constructor stub */
-static inline void *obex_hdr_ctor_inplace_dispatcher(struct obex_header *hdr,
-                                                     const struct obex_hdr_initializer *value)
-{
-        switch (obex_hdr_pattern_mapper(hdr->hi)) {
-        case OBEX_HDR_PATTERN_00:
-                return obex_hdr_ctor_pattern_00_dispatcher(hdr, value);
-        case OBEX_HDR_PATTERN_01:
-                return obex_hdr_ctor_pattern_01_dispatcher(hdr, value);
-        case OBEX_HDR_PATTERN_10:
-                return obex_hdr_ctor_pattern_10_dispatcher(hdr, value);
-        case OBEX_HDR_PATTERN_11:
-                return obex_hdr_ctor_pattern_11_dispatcher(hdr, value);
-        default:
-                assert(0);
-        }
-}
-
+/* inplace initialization entrypoint */
 extern void *obex_hdr_ctor_inplace(void *, uint8_t,
                                    const struct obex_hdr_initializer *);
 

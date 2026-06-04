@@ -42,11 +42,8 @@ static size_t adjust_fbuffer_size(size_t expect, size_t curr, size_t reserve)
 {
         if (um_unlikely(expect < reserve))
                 return 0;
-        while (expect < curr + reserve) {
-                fprintf(stderr, "expect is %zu, curr is %zu, reserve is %zu, curr + reserve is %zu\n",
-                        expect, curr, reserve, curr + reserve);
+        while (expect < curr + reserve)
                 curr /= 2;
-        }
         return curr;
 }
 
@@ -96,11 +93,10 @@ static int start_object_transferring(int fd, const char *fname, size_t fsize,
         paops = pagent->pa_ops;
         padops = pagent->pad_ops;
         pad = &pagent->pad;
-        
-        paops->register_fd(pagent, fd);
 
+        /* setup */
+        paops->register_fd(pagent, fd);
         padops->mod_name(pad, fname);
-        padops->mod_type(pad, NULL);
         padops->mod_type(pad, type);
         padops->mod_length(pad, fsize);
         padops->mod_chunk_size(pad, fbsize);

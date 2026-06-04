@@ -85,7 +85,9 @@ extern const uint8_t obex_mini_eob_req[OBEX_PACKET_HDR_SIZE + OBEX_PACKET_HDR_SI
                 __name->packet_len_netord = htons(OBEX_PACKET_HDR_SIZE)
 
 #define dtor_obex_minimal_disconnect_local(__name) \
-        __name = NULL
+        do {                                       \
+                __name = NULL;                     \
+        } while (0)
 
 /* minimal response packet */
 #define ctor_obex_minimal_response_local(__name)                        \
@@ -93,8 +95,10 @@ extern const uint8_t obex_mini_eob_req[OBEX_PACKET_HDR_SIZE + OBEX_PACKET_HDR_SI
         obex_response_t *__name = (obex_response_t *) __name##__buffer  \
 
 /* minimal response packet destructor */
-#define dtor_obex_minimal_response_local(__name)      \
-        __name = NULL                                 \
+#define dtor_obex_minimal_response_local(__name) \
+        do {                                     \
+                __name = NULL;                   \
+        } while (0)
 
 /* extractors */
 static inline uint8_t *obex_connect_vern(obex_request_t *connect_req)

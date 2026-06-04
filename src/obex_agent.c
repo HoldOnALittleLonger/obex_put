@@ -6,7 +6,7 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 
-#include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <errno.h>
 
