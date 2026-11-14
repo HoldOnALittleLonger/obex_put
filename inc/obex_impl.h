@@ -8,7 +8,7 @@
  *   01 => 1B hi + 2B length + Byte sequence(null terminate)
  *   10 => 1B hi + 1B value
  *   11 => 1B hi + 4B value
- * We can make a map,and map the @hi to pattern.
+ * We can make a map,map the @hi to pattern.
  * For example,NAME header has form [ hi | length | UTF-16BE ].
  * and @hi of NAME header,the 7-th and 6-th bits composed
  * "00",so NAME is mapped to 00-pattern.
@@ -18,7 +18,7 @@
  * Similarly,we can use the same initializer to 10-pattern and 11-pattern.
  *   initializer => { uint32_t value }
  * For 00-pattern and 01-pattern,we requires the constructor
- * handles them in different,00-pattern,the memory will occupied
+ * handles them in different ways,00-pattern,the memory will occupied
  * by header is "1B hi + 2B length + UTF16_SIZE(strlen(@text) + 1B null-terminate)".
  * There only two patterns have variable header size,00 and 01.
  *   obex_hdr_pttr_00_size(__text_size)
@@ -97,6 +97,13 @@
  * Because the @hi is contained by each hdr,we skip it,and
  * let the idx of member start from the @hv,initial idx is 0,
  * offset relative to @hv is 0.
+ *   00 pattern AND 01 pattern
+ *   @hv.0 => 2B Length
+ *   @hv.1 => String
+ *
+ *   10 pattern AND 11 pattern
+ *   @hv.0 => 1B value
+ *   @hv.0 => 4B value
  * There at least has one member,at most has two member,
  * so @idx would not equal to 2,otherwise,it is illegal.
  * Now,we no longer need the size definitions of each fields
@@ -151,6 +158,7 @@ static enum obex_hdr_pattern obex_hdr_pattern_mapper(uint8_t hi)
         case OBEX_HI_LENGTH:
                 return OBEX_HDR_PATTERN_11;
         default:
+                /* for unsupported HI,we abort program */
                 assert(0);
         }
 }
@@ -158,23 +166,17 @@ static enum obex_hdr_pattern obex_hdr_pattern_mapper(uint8_t hi)
 /* get member offset to @hv for given pattern */
 static inline uint8_t obex_hdr_member_offset(enum obex_hdr_pattern p, uint8_t idx)
 {
-        if (idx > 1)
-                assert(0);
+        /* member idxs should never greater than 1 */
+        assert(idx <= 1);
         
         switch (p) {
         case OBEX_HDR_PATTERN_00:
         case OBEX_HDR_PATTERN_01:
-                switch (idx) {
-                case 0:
-                        return 0;
-                case 1:
-                        return OBEX_HDR_FIXED_LENGTH_SIZE;
-                }
+                return !idx ? 0 : OBEX_HDR_FIXED_LENGTH_SIZE;
         case OBEX_HDR_PATTERN_10:
         case OBEX_HDR_PATTERN_11:
-                /* 10 11 pattern only allows idx 0 */
-                if (idx)
-                        assert(0);
+                /* 10 11 patterns only allow idx 0 */
+                assert(!idx);
                 return 0;
         }
 }
@@ -217,8 +219,7 @@ struct obex_hdr_initializer {
 static inline struct obex_hdr_initializer
 ctor_obex_hdr_initializer(uint64_t value, uint8_t is_small, size_t value_size)
 {
-        if (is_small && value_size)
-                assert(0);
+        assert(!(is_small && value_size));
 
         if (is_small) {
                 struct obex_hdr_initializer x = {
@@ -395,6 +396,7 @@ static inline size_t obex_hdr_compute_size(uint8_t hi, size_t value_size)
         case OBEX_HDR_PATTERN_11:
                 return obex_hdr_pattern_11_size(value_size);
         default:
+                /* bad pattern */
                 assert(0);
         }
 }
@@ -417,6 +419,7 @@ static inline size_t obex_hdr_value_size(const struct obex_header *hdr,
         case OBEX_HDR_PATTERN_11:
                 return hdr_size - OBEX_HDR_HI_SIZE;
         default:
+                /* bad pattern */
                 assert(0);        
         }
 }
@@ -439,6 +442,11 @@ extern void *obex_hdr_ctor_inplace(void *, uint8_t,
 #define obex_set_final(__uint8vp)        \
         do {                             \
                 *(__uint8vp) |= 0x80;    \
+        } while (0)
+
+#define obex_clr_final(__uint8vp)        \
+        do {                             \
+                *(__uint8vp) &= ~0x80;   \
         } while (0)
 
 #endif /* obex_impl.h */
