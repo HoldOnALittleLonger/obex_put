@@ -1,4 +1,7 @@
+#define _GNU_SOURCE
+
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
@@ -87,14 +90,12 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
                 dtor_obex_layout(layout);
         }
 
-        /* result of generic obex send */
-        if (ret < 0)
-                ret = (ret != -ENOMEM) ? -EBUSY : ret;
-        else {
-                /* we need remaining data to determine version and packet size */
+        /* obex send connect request got OK */
+        if (!ret) {
+                /* we need the remaining data to determine version and packet size */
                 obex_response_t *res = (obex_response_t *)res_buff;
                 size_t remain = ntohs(res->packet_len_netord) - OBEX_PACKET_HDR_SIZE;
-                remain = read(socketfd, res_buff + OBEX_PACKET_HDR_SIZE, remain);
+                remain = recv(socketfd, res_buff + OBEX_PACKET_HDR_SIZE, remain, 0);
                 if (remain <= 0) {
                         ret = -EIO;
                         goto exit_err_close;
@@ -245,6 +246,9 @@ static int default_pa_push_object(struct obex_put_agent *agent)
         
         if (socket_fd < 0 || fd < 0)
                 return -EIO;
+
+        /* we advise kernel sequential reading on @fd */
+        assert(posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL) == 0);
 
         ret = -ENOMEM;
         chunk = malloc(sizeof(uint8_t) * chunk_size);

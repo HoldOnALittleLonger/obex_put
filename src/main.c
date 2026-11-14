@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200112L
+#define _GNU_SOURCE
 
 #define UM_CONFIG_LIKELY
 
@@ -19,21 +19,30 @@
 
 #include "utility_macro.h"
 
-/**
- * 1 Page.
- * If the packet transferred to peer is too large,
- * then unexpected error may happens.
- */
-#define FILE_CHUNK_SIZE 4096
+#define kB (1024)
 
-#define OBEX_RESERVED_SIZE 128
-/* 33280 B */
+/**
+ * ! on rfcomm,the maximumal obex packet size is
+ *   64kB - 1 => 65535 bytes
+ */
+
+/* file chunk size := file chunk size factor * KB */
+#define FILE_CHUNK_SIZE_FACTOR (63)
+#define FILE_CHUNK_SIZE (FILE_CHUNK_SIZE_FACTOR * kB)
+
+/**
+ * reserved space for hdrs,includes description message,
+ * but data of PUT method is not counted in.
+ */
+#define OBEX_RESERVED_SIZE (256)
+
+/* FILE_CHUNK_SIZE + 256 bytes */
 #define DEFAULT_OBEX_PACKET_SIZE (FILE_CHUNK_SIZE + OBEX_RESERVED_SIZE)
 
 static void print_help_msg(void)
 {
         printf("usage: @program <bt-address> <rfcomm channel for push> <filename>\n");
-        printf("# command \"spdtool browser <bt-address>\" can be used to scan rfcomm\n"
+        printf("# command \"sdptool browser <bt-address>\" can be used to scan rfcomm\n"
                "  channels.\n");
         printf("TODO: support SDP.\n");
 }
@@ -61,6 +70,12 @@ static int start_object_transferring(int fd, const char *fname, size_t fsize,
         int ret = 0;
         size_t fbsize = DEFAULT_OBEX_PACKET_SIZE;
         size_t chunk_size = FILE_CHUNK_SIZE;
+
+        #ifdef DEBUG
+        fprintf(stderr, "in function %s : default packet size is %#x\n",
+                __FUNCTION__, fbsize);
+        #endif
+        
         cagent = ctor_obex_ca(peer_addr, channel, 0, fbsize);
         if (!cagent) {
                 fprintf(stderr, "error: Failed to start CONNECT Agent\n");

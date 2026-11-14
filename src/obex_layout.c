@@ -32,10 +32,16 @@ static size_t accumulate_hdrs_size(ohdr_init_collect *hdrs)
 /* L                                            H */
 /* [ 0x80 | 0x00 0x07 | 0x10 | 0x00 | 0xff 0xff ] */
 static const uint8_t obex_mini_connect_req[OBEX_MINI_CONNECTREQ_SIZE] = {
+        /* operation code AND frame size */
         OBEX_REQC_CONNECT, 0x00, 0x07,
+        
+        /* obex version AND flags */
         OBEX_CURR_VERSION_NUM, 0x00,
+        
+        /* maximumal obex packet size */
+        /* default to 1024kB */        
         0x04, 0x00,
-}; /* default to 1024kB */
+}; 
 
 /* deferene from minimal EOB request,we may need to configure
  * the connect request.

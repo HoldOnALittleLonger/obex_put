@@ -1,5 +1,11 @@
 #define UM_CONFIG_LIKELY
 
+#ifdef DEBUG
+
+#define UM_CONFIG_DUMP
+
+#endif
+
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -28,6 +34,16 @@ int generic_obex_send(int obex_sock, const obex_request_t *req, obex_response_t 
         ssize_t send_remain_size = ntohs(req->packet_len_netord);
         if (!res || um_unlikely(send_remain_size == 0))
                 return -EINVAL;
+
+        #ifdef DEBUG
+        fprintf(stderr, "in function %s :\n"
+                "\tsocket - %d bytes to send - %d\n"
+                "\trequest_packet address - %p flush stream? - %d\n",
+                __FUNCTION__,
+                obex_sock, send_remain_size,
+                req, flush_stream);
+        um_dump_mem(req, send_remain_size > 128 ? 128 : send_remain_size, __FUNCTION__);
+        #endif
 
         const void *iter = req;
         while (send_remain_size > 0) {
