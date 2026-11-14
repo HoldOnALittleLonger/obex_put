@@ -50,7 +50,9 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
         struct obex_packet *req_packet = NULL;
         const struct obex_cad_operations *cadops = agent->cad_ops;
         uint8_t mini_connect_packet[OBEX_MINI_CONNECTREQ_SIZE] = {0};
-        uint8_t res_buff[MIN_OBEX_PACKET_SIZE] = {0};
+
+        #define RES_BUFF_SIZE 128
+        uint8_t res_buff[RES_BUFF_SIZE] = {0};        
 
         req_packet = (struct obex_packet *)mini_connect_packet;
         if (minimal) {
@@ -92,10 +94,24 @@ static int default_ca_connect(struct obex_connect_agent *agent, int minimal)
 
         /* obex send connect request got OK */
         if (!ret) {
-                /* we need the remaining data to determine version and packet size */
+                /**
+                 * we need the remaining data to determine version and packet size.
+                 * maybe there are options returned by peer,but we ignore them currently.
+                 */
                 obex_response_t *res = (obex_response_t *)res_buff;
-                size_t remain = ntohs(res->packet_len_netord) - OBEX_PACKET_HDR_SIZE;
-                remain = recv(socketfd, res_buff + OBEX_PACKET_HDR_SIZE, remain, 0);
+                const size_t pkg_size = ntohs(res->packet_len_netord);
+                
+                /* generic_obex_send() always reads response data with
+                 * OBEX_PACKET_HDR_SIZE bytes when @flush_stream is 0.
+                 */
+                const size_t received_size = OBEX_PACKET_HDR_SIZE;
+                
+                const size_t left_space = RES_BUFF_SIZE - received_size;
+                /* prevent exceed buffer boundary */
+                size_t remain = (pkg_size - received_size) > left_space ? left_space :
+                        pkg_size - received_size;
+                
+                remain = recv(socketfd, res_buff + received_size, remain, 0);
                 if (remain <= 0) {
                         ret = -EIO;
                         goto exit_err_close;
@@ -117,6 +133,8 @@ exit_err_close:
         if (!agent->connected)
                 (void)shutdown(socketfd, SHUT_RDWR);
         return ret;
+
+        #undef RES_BUFF_SIZE
 }
 
 /* send disconnect request to obex server,disconnect rfcomm socket */
